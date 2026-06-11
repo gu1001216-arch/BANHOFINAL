@@ -301,7 +301,7 @@ textarea.input{min-height:auto;resize:vertical;}
 .cesto.st-PREENCHER .cesto-tag{color:#475569;}
 .cesto.is-paused::before{background:var(--red);opacity:1;}
 .cesto.is-paused .cesto-tag,.cesto.is-paused .cesto-lock{color:var(--red);}
-.cesto-2op{position:absolute;top:9px;left:11px;font-size:.95rem;color:var(--aco-500);}
+.cesto-nop{position:absolute;top:7px;left:9px;font-size:.72rem;font-weight:800;color:var(--aco-500);display:flex;align-items:center;gap:2px;}
 .multi-badge{position:absolute;bottom:7px;right:8px;background:var(--violet);color:#fff;font-size:.62rem;font-weight:800;padding:2px 7px;border-radius:20px;}
 /* ── Lista de OPs no formulário ─────────────────────────────── */
 .itens-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px;}

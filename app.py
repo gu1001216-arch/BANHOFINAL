@@ -271,8 +271,7 @@ def _lista_operadores_prep():
 @login_required('prep', 'banho')
 def tela_prep():
     return render_template('prep.html', nome=session.get('nome'),
-                           perfil=session.get('perfil'), processos=PROCESSOS,
-                           operadores=_lista_operadores_prep())
+                           perfil=session.get('perfil'), processos=PROCESSOS)
 
 
 @app.route('/banho')
@@ -465,13 +464,13 @@ def api_prep_iniciar():
                                  Card.estado.in_(ESTADOS_ATIVOS)).first():
             return jsonify({'sucesso': False, 'erro': f'Cesto {numero} já está em uso.'}), 400
         try:
-            n_op = 2 if int(d.get('n_operadores', 1)) == 2 else 1
+            n_op = int(d.get('n_operadores', 1))
+            n_op = n_op if n_op in (1, 2, 3) else 1
         except (ValueError, TypeError):
             n_op = 1
-        op2 = (d.get('operador_prep2') or '').strip() if n_op == 2 else ''
         card = Card(estado=ST_PREPARANDO, numero_cesto=numero,
                     operador_prep=session.get('nome', ''),
-                    operador_prep2=op2, n_operadores=n_op,
+                    operador_prep2='', n_operadores=n_op,
                     prep_inicio=datetime.utcnow())
         db.add(card)
         db.commit()
@@ -607,13 +606,13 @@ def api_card_editar():
                 card.prep_minutos = round(float(d.get('prep_minutos')), 1)
             except (ValueError, TypeError):
                 pass
-        # editar operadores
+        # editar nº de operadores (1, 2 ou 3)
         if 'n_operadores' in d:
             try:
-                card.n_operadores = 2 if int(d.get('n_operadores')) == 2 else 1
+                n = int(d.get('n_operadores'))
+                card.n_operadores = n if n in (1, 2, 3) else 1
             except (ValueError, TypeError):
                 pass
-            card.operador_prep2 = (d.get('operador_prep2') or '').strip() if card.n_operadores == 2 else ''
         db.commit()
         return jsonify({'sucesso': True})
     finally:

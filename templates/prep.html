@@ -28,15 +28,9 @@
       <div id="viewIniciar" style="display:none;">
         <label class="label">Quantos operadores neste cesto?</label>
         <div class="opbtns">
-          <button class="opbtn active" id="op1btn" onclick="setNOper(1)">1 operador</button>
-          <button class="opbtn" id="op2btn" onclick="setNOper(2)">2 operadores</button>
-        </div>
-        <div class="field" id="boxOp2" style="display:none;margin-top:14px;">
-          <label class="label">Segundo operador</label>
-          <select id="selOp2" class="select input-sm">
-            <option value="">Selecione…</option>
-            {% for o in operadores %}<option>{{ o }}</option>{% endfor %}
-          </select>
+          <button class="opbtn active" id="op1btn" onclick="setNOper(1)">1</button>
+          <button class="opbtn" id="op2btn" onclick="setNOper(2)">2</button>
+          <button class="opbtn" id="op3btn" onclick="setNOper(3)">3</button>
         </div>
         <button class="btn btn-aqua btn-block" style="margin-top:20px;" onclick="iniciarPrep()"><i class="bi bi-play-fill"></i>Iniciar preparação</button>
       </div>
@@ -115,7 +109,7 @@ async function carregar(){
       cron=`<span class="cesto-mini-cron cron-el" data-ini="${cd.banho_inicio_iso}">${fmtTempo(Math.max(0,Math.floor((Date.now()-new Date(cd.banho_inicio_iso).getTime())/1000)))}</span>`;
     }
     const badge=cd.n_itens>1?`<span class="multi-badge">${cd.n_itens} OPs</span>`:'';
-    const op2=cd.n_operadores>1?'<i class="bi bi-people-fill cesto-2op" title="2 operadores"></i>':'';
+    const op2=cd.n_operadores>1?`<span class="cesto-nop" title="${cd.n_operadores} operadores"><i class="bi bi-people-fill"></i>${cd.n_operadores}</span>`:'';
     return `<button class="cesto ocupado ${cls}" onclick='abrirOcupado(${JSON.stringify(cd).replace(/'/g,"&#39;")})'>
       <i class="bi ${cd.pausado?'bi-pause-circle-fill':'bi-lock-fill'} cesto-lock"></i>${op2}
       <span class="cesto-num">${cd.numero_cesto}</span><span class="cesto-tag">${rot}</span>${cron}${badge}</button>`;
@@ -131,12 +125,11 @@ function setNOper(n){
   nOper=n;
   document.getElementById('op1btn').classList.toggle('active',n===1);
   document.getElementById('op2btn').classList.toggle('active',n===2);
-  document.getElementById('boxOp2').style.display=n===2?'block':'none';
+  document.getElementById('op3btn').classList.toggle('active',n===3);
 }
 
 function abrirLivre(num){
   cestoSel=num; modalEstado='iniciar'; cardAtual=null; setNOper(1);
-  document.getElementById('selOp2').value='';
   document.getElementById('mCesto').textContent=num;
   mostrarView('iniciar');
   document.getElementById('modal').classList.add('open');
@@ -224,9 +217,7 @@ function atualizarBotaoPausa(p){
 function fecharModal(){document.getElementById('modal').classList.remove('open');modalEstado='';cardAtual=null;itens=[];}
 
 async function iniciarPrep(){
-  let op2='';
-  if(nOper===2){op2=document.getElementById('selOp2').value;if(!op2){alert('Selecione o segundo operador.');return;}}
-  const j=await (await fetch('/api/prep/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_cesto:cestoSel,n_operadores:nOper,operador_prep2:op2})})).json();
+  const j=await (await fetch('/api/prep/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({numero_cesto:cestoSel,n_operadores:nOper})})).json();
   if(j.sucesso){fecharModal();carregar();}else alert(j.erro);
 }
 async function togglePausa(){
