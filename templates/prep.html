@@ -209,7 +209,7 @@ function renderItens(){
       </div>
       <div class="item-grid">
         <div><label class="mini-label">OP</label><input class="input input-sm" value="${it.ordem||''}" oninput="setCampo(${idx},'ordem',this.value)" inputmode="numeric"></div>
-        <div><label class="mini-label">Código</label><input class="input input-sm" value="${it.material||''}" oninput="setCampo(${idx},'material',this.value)"></div>
+        <div><label class="mini-label">Código</label><input class="input input-sm" value="${it.material||''}" oninput="setCampo(${idx},'material',this.value)" onblur="buscarPorCodigo(${idx})"></div>
         <div class="item-grid-full"><label class="mini-label">Descrição</label><input class="input input-sm" value="${(it.texto_breve||'').replace(/"/g,'&quot;')}" oninput="setCampo(${idx},'texto_breve',this.value)"></div>
         <div><label class="mini-label">Quantidade</label><input type="number" class="input input-sm" value="${it.quantidade||0}" oninput="setCampo(${idx},'quantidade',this.value)" inputmode="numeric"></div>
       </div>
@@ -220,6 +220,26 @@ function setCampo(i,campo,v){
   else itens[i][campo]=v;
 }
 function delItem(i){itens.splice(i,1);renderItens();}
+
+// Quando o item não tem OP: ao digitar o código, puxa a descrição da lista mestra
+async function buscarPorCodigo(i){
+  const it=itens[i];
+  if(!it) return;
+  const cod=(it.material||'').trim();
+  // só busca se tiver código, não tiver OP e a descrição estiver vazia
+  if(!cod || (it.ordem||'').trim() || (it.texto_breve||'').trim()) return;
+  try{
+    const j=await (await fetch('/api/buscar_codigo/'+encodeURIComponent(cod))).json();
+    if(j.encontrado){
+      itens[i].texto_breve=j.texto_breve||'';
+      if(!itens[i].quantidade) itens[i].quantidade=j.quantidade||0;
+      renderItens();
+      document.getElementById('msgOrdem').innerHTML='<span class="txt-ok"><i class="bi bi-check-circle-fill"></i> Descrição encontrada pelo código.</span>';
+    }else{
+      document.getElementById('msgOrdem').innerHTML='<span class="txt-warn"><i class="bi bi-exclamation-circle"></i> Código não encontrado na lista — digite a descrição na mão.</span>';
+    }
+  }catch(_){}
+}
 
 async function addOrdem(){
   const op=document.getElementById('addOp').value.trim();
