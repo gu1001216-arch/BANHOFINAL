@@ -12,14 +12,38 @@
     <div id="fila" class="flow-list"><div class="muted small">Carregando…</div></div>
   </div>
 </div>
+
+<!-- Modal de saída do banho -->
+<div class="modal-overlay" id="modalSaida">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-head">
+      <h5><i class="bi bi-box-arrow-right"></i>Sair do banho — Cesto <span id="sCesto"></span></h5>
+      <button class="modal-x" onclick="fecharSaida()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sId">
+      <div class="field" style="margin:0;">
+        <label class="label">Observação (opcional)</label>
+        <textarea id="sObs" class="input" rows="3" placeholder="Ex: peça com retoque, problema no banho..."></textarea>
+        <div class="hint">Deixe em branco se não houver observação.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fecharSaida()" style="flex:0 0 auto;">Cancelar</button>
+      <button class="btn btn-stop" style="flex:1;" onclick="confirmarSaida()"><i class="bi bi-stop-circle-fill"></i>Confirmar saída</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
+let ultimaFila=[];
 function fmtTempo(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;const mm=String(m).padStart(2,'0'),xx=String(x).padStart(2,'0');return h>0?`${h}:${mm}:${xx}`:`${mm}:${xx}`;}
 
 async function carregar(){
   const r=await fetch('/api/banho/fila'); const j=await r.json(); const agora=Date.now();
+  ultimaFila=j.em_banho||[];
   const eb=document.getElementById('emBanho');
   eb.innerHTML=j.em_banho.length?j.em_banho.map(c=>{
     const seg=c.banho_inicio_iso?Math.max(0,Math.floor((agora-new Date(c.banho_inicio_iso).getTime())/1000)):0;
@@ -54,7 +78,22 @@ async function carregar(){
 function tick(){const a=Date.now();document.querySelectorAll('.cron-el[data-ini]').forEach(e=>{e.textContent=fmtTempo(Math.max(0,Math.floor((a-new Date(e.dataset.ini).getTime())/1000)));});}
 
 async function iniciar(id){await fetch('/api/banho/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});carregar();}
-async function finalizar(id){if(!confirm('Confirmar saída do banho?'))return;await fetch('/api/banho/finalizar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});carregar();}
+function finalizar(id){
+  document.getElementById('sId').value=id;
+  document.getElementById('sObs').value='';
+  // mostra o nº do cesto no título
+  const card=ultimaFila.find(c=>c.id===id);
+  document.getElementById('sCesto').textContent=card?card.numero_cesto:'';
+  document.getElementById('modalSaida').classList.add('open');
+}
+function fecharSaida(){document.getElementById('modalSaida').classList.remove('open');}
+async function confirmarSaida(){
+  const id=document.getElementById('sId').value;
+  const obs=document.getElementById('sObs').value.trim();
+  await fetch('/api/banho/finalizar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,obs_banho:obs})});
+  fecharSaida();carregar();
+}
+document.getElementById('modalSaida').addEventListener('click',e=>{if(e.target.id==='modalSaida')fecharSaida();});
 
 carregar();setInterval(carregar,4000);setInterval(tick,1000);
 </script>

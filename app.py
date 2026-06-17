@@ -43,7 +43,7 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
 Session = scoped_session(sessionmaker(bind=engine))
 Base = declarative_base()
 
-TOTAL_CESTOS = 19
+TOTAL_CESTOS = 20
 
 PROCESSOS = [
     "AÇO SEM OXIDAÇÃO", "AÇO COM OXIDAÇÃO", "ALUMÍNIO",
@@ -132,6 +132,7 @@ class Card(Base):
     banho_inicio = Column(DateTime)
     banho_fim = Column(DateTime)
     banho_minutos = Column(Float, default=0)
+    obs_banho = Column(Text, default='')   # observação registrada na saída do banho
 
     criado_em = Column(DateTime, default=datetime.utcnow)
 
@@ -157,6 +158,7 @@ class Card(Base):
             'texto_breve': self.texto_breve, 'quantidade': self.quantidade,
             'itens': itens, 'qtd_total': qtd_total, 'n_itens': len(itens),
             'observacao': self.observacao or '',
+            'obs_banho': self.obs_banho or '',
             'operador_prep': self.operador_prep, 'operador_prep2': self.operador_prep2 or '',
             'n_operadores': self.n_operadores or 1,
             'operador_banho': self.operador_banho,
@@ -189,6 +191,7 @@ def _migrar_colunas():
         'n_operadores': 'INTEGER DEFAULT 1', 'pausado': 'INTEGER DEFAULT 0',
         'pausa_inicio': 'TIMESTAMP NULL', 'pausa_acumulada_seg': 'INTEGER DEFAULT 0',
         'pausa_motivo': "VARCHAR(60) DEFAULT ''", 'pausas_json': 'TEXT',
+        'obs_banho': 'TEXT',
     }
     with engine.begin() as conn:
         for col, tipo in novas.items():
@@ -393,25 +396,72 @@ def api_admin_testar_op(ordem):
         db.close()
 
 
+def _achar_colunas(linhas):
+    """
+    Procura a linha de cabeçalho e mapeia as colunas pelos nomes do SAP.
+    Retorna (idx_cabecalho, {ordem, material, texto, qtd}) ou None se não achar.
+    """
+    def norm(s):
+        return str(s).strip().lower() if s is not None else ''
+    for i, row in enumerate(linhas[:10]):  # cabeçalho costuma estar nas 1ªs linhas
+        if not row:
+            continue
+        nomes = [norm(c) for c in row]
+        idx = {}
+        for j, nome in enumerate(nomes):
+            if nome == 'ordem' and 'ordem' not in idx:
+                idx['ordem'] = j
+            elif nome == 'material' and 'material' not in idx:
+                idx['material'] = j
+            elif 'texto breve' in nome and 'texto' not in idx:
+                idx['texto'] = j
+            elif ('quantidade da ordem' in nome or nome == 'quantidade total'
+                  or nome == 'quantidade') and 'qtd' not in idx:
+                idx['qtd'] = j
+        if 'ordem' in idx and 'material' in idx:  # cabeçalho válido
+            return i, idx
+    return None
+
+
 def importar_mestre(db, linhas):
-    """Otimizado p/ grande volume (17 mil+): 1 consulta inicial + inserção em lote."""
+    """
+    Importa a lista mestra do SAP. Identifica as colunas pelo NOME do cabeçalho
+    (Ordem, Material, Texto breve material, Quantidade da ordem), então funciona
+    mesmo que a ordem das colunas mude. Otimizado p/ grande volume (17 mil+).
+    """
+    achado = _achar_colunas(linhas)
+    if achado:
+        cab_idx, col = achado
+        i_ordem = col.get('ordem', 0)
+        i_mat = col.get('material', 1)
+        i_texto = col.get('texto')      # pode faltar
+        i_qtd = col.get('qtd')          # pode faltar
+        inicio = cab_idx + 1
+    else:
+        # fallback: posições do layout antigo (Ordem, _, Material, Texto, Qtd)
+        i_ordem, i_mat, i_texto, i_qtd = 0, 2, 3, 4
+        inicio = 0
+
+    def val(row, idx):
+        if idx is None or idx >= len(row) or row[idx] is None:
+            return ''
+        return str(row[idx]).strip()
+
     existentes = {o.ordem: o for o in db.query(ItemMestre).all()}
     novos = atual = 0
     novos_objs = []
     vistos = set()
-    for row in linhas:
+    for row in linhas[inicio:]:
         if not row or all(c is None or str(c).strip() == '' for c in row):
             continue
-        c0 = str(row[0]).strip().lower()
-        if 'ordem' in c0 or c0 in ('order',):
-            continue
-        ordem = _norm_ordem(row[0])
+        ordem = _norm_ordem(row[i_ordem]) if i_ordem < len(row) and row[i_ordem] is not None else ''
         if not ordem or not ordem.replace('.', '').isdigit():
             continue
-        material = str(row[2]).strip() if len(row) > 2 and row[2] is not None else ''
-        texto = str(row[3]).strip() if len(row) > 3 and row[3] is not None else ''
+        material = val(row, i_mat)
+        texto = val(row, i_texto)
+        q = val(row, i_qtd)
         try:
-            qtd = int(float(row[4])) if len(row) > 4 and row[4] not in (None, '') else 0
+            qtd = int(float(q)) if q else 0
         except (ValueError, TypeError):
             qtd = 0
         if ordem in existentes:
@@ -699,6 +749,7 @@ def api_banho_finalizar():
             return jsonify({'sucesso': False, 'erro': 'Card não está em banho.'}), 404
         card.banho_fim = datetime.utcnow()
         card.banho_minutos = round((card.banho_fim - card.banho_inicio).total_seconds() / 60, 1)
+        card.obs_banho = (d.get('obs_banho') or '').strip()
         card.estado = ST_CONCLUIDO
         db.commit()
         return jsonify({'sucesso': True, 'banho_minutos': card.banho_minutos})
@@ -802,8 +853,8 @@ def _gerar_excel(tipo):
             ws.title = 'Banho'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
                        'Processo', 'Tipo', 'Operador banho',
-                       'Início banho', 'Fim banho', 'Tempo banho (min)']
-            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 19, 19, 14]
+                       'Início banho', 'Fim banho', 'Tempo banho (min)', 'Observação banho']
+            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 19, 19, 14, 28]
         _estilo_cabecalho(ws, headers)
         for c in cards:
             dd = c.to_dict()
@@ -819,7 +870,8 @@ def _gerar_excel(tipo):
                 else:
                     ws.append([dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
                                it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
-                               dd['operador_banho'], dd['banho_inicio'], dd['banho_fim'], dd['banho_minutos']])
+                               dd['operador_banho'], dd['banho_inicio'], dd['banho_fim'],
+                               dd['banho_minutos'], dd['obs_banho']])
         for i, w in enumerate(larg, 1):
             ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
         ws.freeze_panes = 'A2'
