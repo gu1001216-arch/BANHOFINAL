@@ -86,6 +86,17 @@ class ItemMestre(Base):
                 'texto_breve': self.texto_breve, 'quantidade': self.quantidade}
 
 
+def _pausas_resumo(pausas_json):
+    """Converte {motivo: segundos} em lista [{motivo, minutos}] + texto resumido."""
+    try:
+        mapa = json.loads(pausas_json) if pausas_json else {}
+    except (ValueError, TypeError):
+        mapa = {}
+    lista = [{'motivo': m, 'minutos': round(s / 60, 1)} for m, s in mapa.items()]
+    texto = '; '.join(f"{x['motivo']}: {x['minutos']} min" for x in lista)
+    return {'lista': lista, 'texto': texto}
+
+
 class Card(Base):
     __tablename__ = 'cards'
     id = Column(Integer, primary_key=True)
@@ -114,7 +125,9 @@ class Card(Base):
 
     pausado = Column(Integer, default=0)
     pausa_inicio = Column(DateTime)
+    pausa_motivo = Column(String(60), default='')   # motivo da pausa atual
     pausa_acumulada_seg = Column(Integer, default=0)
+    pausas_json = Column(Text, default='')          # {motivo: segundos_totais}
 
     banho_inicio = Column(DateTime)
     banho_fim = Column(DateTime)
@@ -155,7 +168,9 @@ class Card(Base):
             'banho_inicio_iso': iso(self.banho_inicio),
             'pausado': bool(self.pausado),
             'pausa_inicio_iso': iso(self.pausa_inicio),
+            'pausa_motivo': self.pausa_motivo or '',
             'pausa_acumulada_seg': self.pausa_acumulada_seg or 0,
+            'pausas': _pausas_resumo(self.pausas_json),
             'data_ref': (self.banho_fim - timedelta(hours=3)).strftime('%Y-%m-%d') if self.banho_fim else '',
         }
 
@@ -173,6 +188,7 @@ def _migrar_colunas():
         'itens_json': 'TEXT', 'operador_prep2': "VARCHAR(120) DEFAULT ''",
         'n_operadores': 'INTEGER DEFAULT 1', 'pausado': 'INTEGER DEFAULT 0',
         'pausa_inicio': 'TIMESTAMP NULL', 'pausa_acumulada_seg': 'INTEGER DEFAULT 0',
+        'pausa_motivo': "VARCHAR(60) DEFAULT ''", 'pausas_json': 'TEXT',
     }
     with engine.begin() as conn:
         for col, tipo in novas.items():
@@ -490,14 +506,28 @@ def api_prep_pausar():
             return jsonify({'sucesso': False, 'erro': 'Cesto não está em preparação.'}), 404
         agora = datetime.utcnow()
         if card.pausado:
+            # retomar: soma o tempo desta pausa no motivo correspondente
             if card.pausa_inicio:
-                card.pausa_acumulada_seg = (card.pausa_acumulada_seg or 0) + \
-                    int((agora - card.pausa_inicio).total_seconds())
+                dur = int((agora - card.pausa_inicio).total_seconds())
+                card.pausa_acumulada_seg = (card.pausa_acumulada_seg or 0) + dur
+                try:
+                    mapa = json.loads(card.pausas_json) if card.pausas_json else {}
+                except (ValueError, TypeError):
+                    mapa = {}
+                motivo = card.pausa_motivo or 'Outros'
+                mapa[motivo] = mapa.get(motivo, 0) + dur
+                card.pausas_json = json.dumps(mapa, ensure_ascii=False)
             card.pausado = 0
             card.pausa_inicio = None
+            card.pausa_motivo = ''
         else:
+            # pausar: exige um motivo
+            motivo = (d.get('motivo') or '').strip()
+            if not motivo:
+                return jsonify({'sucesso': False, 'erro': 'Informe o motivo da pausa.'}), 400
             card.pausado = 1
             card.pausa_inicio = agora
+            card.pausa_motivo = motivo[:60]
         db.commit()
         return jsonify({'sucesso': True, 'pausado': bool(card.pausado)})
     finally:
@@ -515,10 +545,18 @@ def api_prep_parar():
             return jsonify({'sucesso': False, 'erro': 'Cesto não está em preparação.'}), 404
         agora = datetime.utcnow()
         if card.pausado and card.pausa_inicio:
-            card.pausa_acumulada_seg = (card.pausa_acumulada_seg or 0) + \
-                int((agora - card.pausa_inicio).total_seconds())
+            dur = int((agora - card.pausa_inicio).total_seconds())
+            card.pausa_acumulada_seg = (card.pausa_acumulada_seg or 0) + dur
+            try:
+                mapa = json.loads(card.pausas_json) if card.pausas_json else {}
+            except (ValueError, TypeError):
+                mapa = {}
+            motivo = card.pausa_motivo or 'Outros'
+            mapa[motivo] = mapa.get(motivo, 0) + dur
+            card.pausas_json = json.dumps(mapa, ensure_ascii=False)
             card.pausado = 0
             card.pausa_inicio = None
+            card.pausa_motivo = ''
         card.prep_fim = agora
         bruto = (card.prep_fim - card.prep_inicio).total_seconds()
         card.prep_minutos = round(max(0, bruto - (card.pausa_acumulada_seg or 0)) / 60, 1)
@@ -757,9 +795,9 @@ def _gerar_excel(tipo):
         if tipo == 'prebanho':
             ws.title = 'Pre-Banho'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
-                       'Processo', 'Tipo', 'Operador 1', 'Operador 2', 'Nº oper.',
-                       'Início', 'Fim', 'Tempo prep (min)', 'Observação']
-            larg = [6, 7, 14, 14, 30, 7, 22, 12, 16, 16, 9, 19, 19, 13, 28]
+                       'Processo', 'Tipo', 'Operador', 'Nº oper.',
+                       'Início', 'Fim', 'Tempo prep (min)', 'Pausas (por motivo)', 'Observação']
+            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 9, 19, 19, 13, 30, 28]
         else:
             ws.title = 'Banho'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
@@ -775,8 +813,9 @@ def _gerar_excel(tipo):
                 if tipo == 'prebanho':
                     ws.append([dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
                                it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
-                               dd['operador_prep'], dd['operador_prep2'], dd['n_operadores'],
-                               dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'], dd['observacao']])
+                               dd['operador_prep'], dd['n_operadores'],
+                               dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
+                               dd['pausas']['texto'], dd['observacao']])
                 else:
                     ws.append([dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
                                it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],

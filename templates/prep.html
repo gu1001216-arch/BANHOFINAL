@@ -81,6 +81,31 @@
     </div>
   </div>
 </div>
+
+<!-- Modal de motivo da pausa -->
+<div class="modal-overlay" id="modalMotivo">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head">
+      <h5><i class="bi bi-pause-circle"></i>Motivo da pausa</h5>
+      <button class="modal-x" onclick="fecharMotivo()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="motivo-grid">
+        <button class="motivo-btn" onclick="escolherMotivo('Almoço/Janta')"><i class="bi bi-cup-hot"></i>Almoço/Janta</button>
+        <button class="motivo-btn" onclick="escolherMotivo('Café')"><i class="bi bi-cup"></i>Café</button>
+        <button class="motivo-btn" onclick="escolherMotivo('Laboral')"><i class="bi bi-person-arms-up"></i>Laboral</button>
+        <button class="motivo-btn" onclick="escolherMotivo('Outros')"><i class="bi bi-three-dots"></i>Outros</button>
+      </div>
+      <div id="outroMotivo" style="display:none;margin-top:14px;">
+        <label class="label">Descreva o motivo</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="outroMotivoTxt" class="input input-sm" placeholder="Ex: manutenção" style="flex:1;">
+          <button class="btn btn-aqua btn-sm" onclick="confirmarOutro()">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -177,31 +202,39 @@ function renderItens(){
   const el=document.getElementById('listaItens');
   if(!itens.length){el.innerHTML='<div class="muted small" style="padding:8px 0;">Nenhuma OP ainda. Bipe ou digite abaixo.</div>';return;}
   el.innerHTML=itens.map((it,idx)=>`
-    <div class="item-op">
-      <div class="item-op-main">
-        <div class="item-op-top">OP <strong>${it.ordem||'—'}</strong> · cód ${it.material||'—'}</div>
-        <div class="item-op-sub">${it.texto_breve||'sem descrição'}</div>
-      </div>
-      <div class="item-op-qtd">
-        <input type="number" class="input input-sm qtd-inp" value="${it.quantidade||0}" onchange="setQtd(${idx},this.value)" inputmode="numeric">
+    <div class="item-op-edit">
+      <div class="item-op-head">
+        <span class="item-op-n">${idx+1}</span>
         <button class="item-op-del" onclick="delItem(${idx})"><i class="bi bi-trash"></i></button>
+      </div>
+      <div class="item-grid">
+        <div><label class="mini-label">OP</label><input class="input input-sm" value="${it.ordem||''}" oninput="setCampo(${idx},'ordem',this.value)" inputmode="numeric"></div>
+        <div><label class="mini-label">Código</label><input class="input input-sm" value="${it.material||''}" oninput="setCampo(${idx},'material',this.value)"></div>
+        <div class="item-grid-full"><label class="mini-label">Descrição</label><input class="input input-sm" value="${(it.texto_breve||'').replace(/"/g,'&quot;')}" oninput="setCampo(${idx},'texto_breve',this.value)"></div>
+        <div><label class="mini-label">Quantidade</label><input type="number" class="input input-sm" value="${it.quantidade||0}" oninput="setCampo(${idx},'quantidade',this.value)" inputmode="numeric"></div>
       </div>
     </div>`).join('');
 }
-function setQtd(i,v){itens[i].quantidade=parseInt(v)||0;}
+function setCampo(i,campo,v){
+  if(campo==='quantidade') itens[i].quantidade=parseInt(v)||0;
+  else itens[i][campo]=v;
+}
 function delItem(i){itens.splice(i,1);renderItens();}
 
 async function addOrdem(){
   const op=document.getElementById('addOp').value.trim();
   const msg=document.getElementById('msgOrdem');
-  if(!op){return;}
+  if(!op){ // adiciona item vazio para digitar tudo na mão
+    itens.push({ordem:'',material:'',texto_breve:'',quantidade:0});
+    renderItens(); return;
+  }
   const j=await (await fetch('/api/buscar_ordem/'+encodeURIComponent(op))).json();
   if(j.encontrado){
     itens.push({ordem:j.ordem,material:j.material,texto_breve:j.texto_breve,quantidade:j.quantidade});
-    msg.innerHTML='<span class="txt-ok"><i class="bi bi-check-circle-fill"></i> OP adicionada.</span>';
+    msg.innerHTML='<span class="txt-ok"><i class="bi bi-check-circle-fill"></i> OP encontrada — preenchida automaticamente.</span>';
   }else{
     itens.push({ordem:j.ordem,material:'',texto_breve:'',quantidade:0});
-    msg.innerHTML='<span class="txt-warn"><i class="bi bi-exclamation-circle"></i> OP fora da lista mestra — adicionada em branco (edite a qtd).</span>';
+    msg.innerHTML='<span class="txt-warn"><i class="bi bi-exclamation-circle"></i> OP fora da lista mestra — preencha código, descrição e quantidade na mão.</span>';
   }
   document.getElementById('addOp').value='';
   renderItens();
@@ -222,8 +255,35 @@ async function iniciarPrep(){
 }
 async function togglePausa(){
   if(!cardAtual)return;
-  const j=await (await fetch('/api/prep/pausar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:cardAtual.id})})).json();
+  if(cardAtual.pausado){
+    // retomar direto
+    await enviarPausa(null);
+  }else{
+    // abrir caixa de motivo
+    abrirMotivo();
+  }
+}
+function abrirMotivo(){document.getElementById('modalMotivo').classList.add('open');document.getElementById('outroMotivo').style.display='none';document.getElementById('outroMotivoTxt').value='';}
+function fecharMotivo(){document.getElementById('modalMotivo').classList.remove('open');}
+function escolherMotivo(m){
+  if(m==='Outros'){
+    document.getElementById('outroMotivo').style.display='block';
+    document.getElementById('outroMotivoTxt').focus();
+  }else{
+    enviarPausa(m); fecharMotivo();
+  }
+}
+function confirmarOutro(){
+  const t=document.getElementById('outroMotivoTxt').value.trim();
+  if(!t){alert('Digite o motivo.');return;}
+  enviarPausa(t); fecharMotivo();
+}
+async function enviarPausa(motivo){
+  const body={id:cardAtual.id};
+  if(motivo) body.motivo=motivo;
+  const j=await (await fetch('/api/prep/pausar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
   if(j.sucesso){const g=await (await fetch('/api/cestos')).json();const c=g.find(x=>x.ocupado&&x.card.id===cardAtual.id);if(c){cardAtual=c.card;atualizarBotaoPausa(cardAtual.pausado);document.getElementById('cronBig').textContent=fmtTempo(segPrep(cardAtual));}carregar();}
+  else alert(j.erro);
 }
 async function pararTempo(){
   if(!cardAtual)return;

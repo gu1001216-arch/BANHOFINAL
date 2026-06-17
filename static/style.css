@@ -313,3 +313,18 @@ textarea.input{min-height:auto;resize:vertical;}
 .qtd-inp{width:74px;min-height:40px;text-align:center;}
 .item-op-del{background:var(--red-soft);color:var(--red);border:none;width:40px;height:40px;border-radius:9px;cursor:pointer;font-size:1rem;}
 .add-op-box{background:#fff;border:2px dashed var(--line);border-radius:11px;padding:12px;margin-bottom:14px;}
+
+/* ── Modal de motivo da pausa ───────────────────────────────── */
+.motivo-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.motivo-btn{display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 10px;border:2px solid var(--line);border-radius:var(--r-sm);background:#fff;font-family:inherit;font-weight:700;font-size:.9rem;color:var(--aco-900);cursor:pointer;transition:.15s;}
+.motivo-btn i{font-size:1.5rem;color:var(--aqua);}
+.motivo-btn:active{transform:scale(.95);}
+.motivo-btn:hover{border-color:var(--aqua);background:var(--aqua-soft);}
+
+/* ── Itens editáveis (OP/código/descrição/qtd) ──────────────── */
+.item-op-edit{background:#f7fafc;border:1px solid var(--line);border-radius:11px;padding:10px 12px;margin-bottom:8px;}
+.item-op-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.item-op-n{width:24px;height:24px;border-radius:50%;background:var(--aco-900);color:#fff;display:grid;place-items:center;font-size:.78rem;font-weight:800;}
+.item-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.item-grid-full{grid-column:1/-1;}
+.mini-label{font-size:.68rem;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;}
