@@ -8,15 +8,18 @@ Recursos:
 - Parar o tempo e só depois preencher os dados
 - Múltiplas OPs por cesto (botão Adicionar OP)
 - 1 ou 2 operadores por cesto (definido ao iniciar)
-- Lista mestra do SAP (Excel) com importação otimizada p/ grande volume
+- Lista mestra do SAP carregada do arquivo (lista_mestra.xlsx, .csv ou .txt)
+  direto na memória RAM ao iniciar — sem banco de dados para isso.
+  Para atualizar: substitua o arquivo no repositório e faça redeploy.
 - Dashboards (admin e público) + export Excel pré-banho e banho
 
-Banco: PostgreSQL (Railway). Local sem DATABASE_URL -> SQLite.
+Banco: PostgreSQL (Railway) apenas para cards e usuários. Local sem DATABASE_URL -> SQLite.
 """
 import os
 import io
 import csv
 import json
+import threading
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -32,6 +35,121 @@ from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'troque-esta-chave-em-producao')
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Lista mestra em memória (carregada do arquivo — sem banco de dados)
+# Coloque lista_mestra.xlsx (ou .csv / .txt tab-separado) na raiz do projeto.
+# Para atualizar: substitua o arquivo e faça redeploy no Railway.
+# ─────────────────────────────────────────────────────────────────────────────
+_lista_lock = threading.Lock()
+_lista_por_ordem = {}    # {ordem_normalizada: dict}
+_lista_por_material = {} # {material: dict}  — para busca por código
+_lista_status = {'carregada': False, 'total': 0, 'erro': None}
+
+LISTA_MESTRA_ARQUIVOS = [
+    'lista_mestra.xlsx',
+    'lista_mestra.csv',
+    'lista_mestra.txt',
+    'exemplo_lista_mestra_sap.txt',  # fallback para desenvolvimento
+]
+
+
+def _norm_str(v):
+    if v is None:
+        return ''
+    s = str(v).strip()
+    if s.endswith('.0'):
+        s = s[:-2]
+    return s
+
+
+def _achar_arquivo_mestre():
+    base = os.path.dirname(os.path.abspath(__file__))
+    for nome in LISTA_MESTRA_ARQUIVOS:
+        caminho = os.path.join(base, nome)
+        if os.path.isfile(caminho):
+            return caminho
+    return None
+
+
+def _parsear_linhas_mestre(linhas):
+    """Recebe lista de listas (linhas já lidas) e retorna (por_ordem, por_material)."""
+    achado = _achar_colunas(linhas)
+    if achado:
+        cab_idx, col = achado
+        i_ordem = col.get('ordem', 0)
+        i_mat   = col.get('material', 1)
+        i_texto = col.get('texto')
+        i_qtd   = col.get('qtd')
+        inicio  = cab_idx + 1
+    else:
+        i_ordem, i_mat, i_texto, i_qtd = 0, 2, 3, 4
+        inicio = 0
+
+    def val(row, idx):
+        if idx is None or idx >= len(row) or row[idx] is None:
+            return ''
+        return str(row[idx]).strip()
+
+    por_ordem    = {}
+    por_material = {}
+    for row in linhas[inicio:]:
+        if not row or all(c is None or str(c).strip() == '' for c in row):
+            continue
+        ordem = _norm_ordem(row[i_ordem]) if i_ordem < len(row) and row[i_ordem] is not None else ''
+        if not ordem or not ordem.replace('.', '').isdigit():
+            continue
+        material   = val(row, i_mat)
+        texto      = val(row, i_texto)
+        q          = val(row, i_qtd)
+        try:
+            qtd = int(float(q)) if q else 0
+        except (ValueError, TypeError):
+            qtd = 0
+        item = {'ordem': ordem, 'material': material, 'texto_breve': texto, 'quantidade': qtd}
+        por_ordem[ordem] = item
+        if material and material not in por_material:
+            por_material[material] = item
+    return por_ordem, por_material
+
+
+def carregar_lista_mestre():
+    """Carrega (ou recarrega) a lista mestra do arquivo para a memória."""
+    global _lista_por_ordem, _lista_por_material, _lista_status
+    caminho = _achar_arquivo_mestre()
+    if not caminho:
+        with _lista_lock:
+            _lista_status = {'carregada': False, 'total': 0,
+                             'erro': 'Arquivo lista_mestra.xlsx/.csv/.txt não encontrado na raiz do projeto.'}
+        print('[lista_mestra] AVISO: nenhum arquivo encontrado.')
+        return
+
+    try:
+        nome = caminho.lower()
+        linhas = []
+        if nome.endswith('.csv') or nome.endswith('.txt'):
+            with open(caminho, encoding='utf-8-sig', errors='replace') as f:
+                raw = f.read()
+            sep = '\t' if raw.count('\t') > raw.count(';') and raw.count('\t') > raw.count(',') \
+                else (';' if raw.count(';') > raw.count(',') else ',')
+            linhas = list(csv.reader(io.StringIO(raw), delimiter=sep))
+        else:
+            from openpyxl import load_workbook as _lw
+            wb = _lw(caminho, read_only=True, data_only=True)
+            ws = wb.active
+            for row in ws.iter_rows(values_only=True):
+                linhas.append(list(row))
+
+        por_ordem, por_material = _parsear_linhas_mestre(linhas)
+        with _lista_lock:
+            _lista_por_ordem    = por_ordem
+            _lista_por_material = por_material
+            _lista_status = {'carregada': True, 'total': len(por_ordem), 'erro': None}
+        print(f'[lista_mestra] Carregada: {len(por_ordem)} ordens de "{os.path.basename(caminho)}".')
+    except Exception as e:
+        with _lista_lock:
+            _lista_status = {'carregada': False, 'total': 0, 'erro': str(e)}
+        print(f'[lista_mestra] ERRO ao carregar: {e}')
 
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 if DATABASE_URL.startswith('postgres://'):
@@ -72,18 +190,6 @@ class Usuario(Base):
     def to_dict(self):
         return {'id': self.id, 'login': self.login, 'nome': self.nome, 'perfil': self.perfil}
 
-
-class ItemMestre(Base):
-    __tablename__ = 'itens_mestre'
-    id = Column(Integer, primary_key=True)
-    ordem = Column(String(60), unique=True, nullable=False, index=True)  # OP
-    material = Column(String(60), default='', index=True)                # código
-    texto_breve = Column(String(255), default='')                        # descrição
-    quantidade = Column(Integer, default=0)
-
-    def to_dict(self):
-        return {'ordem': self.ordem, 'material': self.material,
-                'texto_breve': self.texto_breve, 'quantidade': self.quantidade}
 
 
 def _pausas_resumo(pausas_json):
@@ -200,16 +306,13 @@ def _migrar_colunas():
                     conn.execute(text(f'ALTER TABLE cards ADD COLUMN {col} {tipo}'))
                 except Exception:
                     pass
-        # índice em itens_mestre.material (busca por código quando não tem OP)
-        try:
-            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_itens_mestre_material ON itens_mestre (material)'))
-        except Exception:
-            pass
+
 
 
 def init_db():
     Base.metadata.create_all(engine)
     _migrar_colunas()
+    carregar_lista_mestre()  # carrega a lista mestra do arquivo em memória
     db = Session()
     try:
         if db.query(Usuario).count() == 0:
@@ -357,48 +460,36 @@ def admin_usuarios():
 @app.route('/admin/mestre', methods=['GET', 'POST'])
 @login_required('admin')
 def admin_mestre():
-    db = Session()
     msg = None
-    try:
-        if request.method == 'POST':
-            f = request.files.get('arquivo')
-            if f and f.filename:
-                nome = f.filename.lower()
-                try:
-                    linhas = []
-                    if nome.endswith('.csv') or nome.endswith('.txt'):
-                        raw = f.stream.read().decode('utf-8-sig', errors='replace')
-                        sep = '\t' if raw.count('\t') > raw.count(';') and raw.count('\t') > raw.count(',') \
-                            else (';' if raw.count(';') > raw.count(',') else ',')
-                        linhas = list(csv.reader(io.StringIO(raw), delimiter=sep))
-                    else:
-                        wb = load_workbook(f, read_only=True, data_only=True)
-                        ws = wb.active
-                        for row in ws.iter_rows(values_only=True):
-                            linhas.append(list(row))
-                    novos, atual = importar_mestre(db, linhas)
-                    msg = f'Importado: {novos} novas ordens, {atual} atualizadas.'
-                except Exception as e:
-                    msg = f'Erro ao importar: {e}'
-        total = db.query(ItemMestre).count()
-        amostra = [i.to_dict() for i in db.query(ItemMestre).limit(25).all()]
-        return render_template('mestre.html', nome=session.get('nome'),
-                               msg=msg, total_itens=total, amostra=amostra)
-    finally:
-        db.close()
+    if request.method == 'POST' and request.form.get('acao') == 'recarregar':
+        carregar_lista_mestre()
+        st = _lista_status
+        if st['carregada']:
+            msg = f'Lista recarregada com sucesso: {st["total"]} ordens na memória.'
+        else:
+            msg = f'Erro ao recarregar: {st["erro"]}'
+
+    with _lista_lock:
+        st     = dict(_lista_status)
+        amostra = list(_lista_por_ordem.values())[:25]
+
+    caminho = _achar_arquivo_mestre()
+    arquivo_info = os.path.basename(caminho) if caminho else 'Nenhum arquivo encontrado'
+    return render_template('mestre.html', nome=session.get('nome'),
+                           msg=msg, total_itens=st['total'],
+                           amostra=amostra, status=st,
+                           arquivo_info=arquivo_info)
 
 
 @app.route('/api/admin/testar_op/<path:ordem>')
 @login_required('admin')
 def api_admin_testar_op(ordem):
-    db = Session()
-    try:
-        item = db.query(ItemMestre).filter_by(ordem=_norm_ordem(ordem)).first()
-        if item:
-            return jsonify({'encontrado': True, **item.to_dict()})
-        return jsonify({'encontrado': False, 'ordem': _norm_ordem(ordem)})
-    finally:
-        db.close()
+    o = _norm_ordem(ordem)
+    with _lista_lock:
+        item = _lista_por_ordem.get(o)
+    if item:
+        return jsonify({'encontrado': True, **item})
+    return jsonify({'encontrado': False, 'ordem': o})
 
 
 def _achar_colunas(linhas):
@@ -428,64 +519,7 @@ def _achar_colunas(linhas):
     return None
 
 
-def importar_mestre(db, linhas):
-    """
-    Importa a lista mestra do SAP. Identifica as colunas pelo NOME do cabeçalho
-    (Ordem, Material, Texto breve material, Quantidade da ordem), então funciona
-    mesmo que a ordem das colunas mude. Otimizado p/ grande volume (17 mil+).
-    """
-    achado = _achar_colunas(linhas)
-    if achado:
-        cab_idx, col = achado
-        i_ordem = col.get('ordem', 0)
-        i_mat = col.get('material', 1)
-        i_texto = col.get('texto')      # pode faltar
-        i_qtd = col.get('qtd')          # pode faltar
-        inicio = cab_idx + 1
-    else:
-        # fallback: posições do layout antigo (Ordem, _, Material, Texto, Qtd)
-        i_ordem, i_mat, i_texto, i_qtd = 0, 2, 3, 4
-        inicio = 0
 
-    def val(row, idx):
-        if idx is None or idx >= len(row) or row[idx] is None:
-            return ''
-        return str(row[idx]).strip()
-
-    existentes = {o.ordem: o for o in db.query(ItemMestre).all()}
-    novos = atual = 0
-    novos_objs = []
-    vistos = set()
-    for row in linhas[inicio:]:
-        if not row or all(c is None or str(c).strip() == '' for c in row):
-            continue
-        ordem = _norm_ordem(row[i_ordem]) if i_ordem < len(row) and row[i_ordem] is not None else ''
-        if not ordem or not ordem.replace('.', '').isdigit():
-            continue
-        material = val(row, i_mat)
-        texto = val(row, i_texto)
-        q = val(row, i_qtd)
-        try:
-            qtd = int(float(q)) if q else 0
-        except (ValueError, TypeError):
-            qtd = 0
-        if ordem in existentes:
-            ex = existentes[ordem]
-            ex.material, ex.texto_breve, ex.quantidade = material, texto, qtd
-            atual += 1
-        elif ordem not in vistos:
-            novos_objs.append(ItemMestre(ordem=ordem, material=material,
-                                         texto_breve=texto, quantidade=qtd))
-            vistos.add(ordem)
-            novos += 1
-        if len(novos_objs) >= 1000:
-            db.bulk_save_objects(novos_objs)
-            db.commit()
-            novos_objs = []
-    if novos_objs:
-        db.bulk_save_objects(novos_objs)
-    db.commit()
-    return novos, atual
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -506,33 +540,37 @@ def api_cestos():
         db.close()
 
 
+@app.route('/api/admin/lista_status')
+@login_required('admin')
+def api_lista_status():
+    with _lista_lock:
+        st = dict(_lista_status)
+    st['arquivo'] = os.path.basename(_achar_arquivo_mestre() or '') or 'não encontrado'
+    return jsonify(st)
+
+
 @app.route('/api/buscar_ordem/<path:ordem>')
 @login_required('prep', 'banho')
 def api_buscar_ordem(ordem):
-    db = Session()
-    try:
-        item = db.query(ItemMestre).filter_by(ordem=_norm_ordem(ordem)).first()
-        if item:
-            return jsonify({'encontrado': True, **item.to_dict()})
-        return jsonify({'encontrado': False, 'ordem': _norm_ordem(ordem)})
-    finally:
-        db.close()
+    o = _norm_ordem(ordem)
+    with _lista_lock:
+        item = _lista_por_ordem.get(o)
+    if item:
+        return jsonify({'encontrado': True, **item})
+    return jsonify({'encontrado': False, 'ordem': o})
 
 
 @app.route('/api/buscar_codigo/<path:codigo>')
 @login_required('prep', 'banho')
 def api_buscar_codigo(codigo):
     """Busca a descrição pelo código (Material), p/ itens sem OP."""
-    db = Session()
-    try:
-        cod = _norm_ordem(codigo)  # mesma normalização (tira espaços e .0)
-        item = db.query(ItemMestre).filter_by(material=cod).first()
-        if item:
-            return jsonify({'encontrado': True, 'material': item.material,
-                            'texto_breve': item.texto_breve, 'quantidade': item.quantidade})
-        return jsonify({'encontrado': False, 'material': cod})
-    finally:
-        db.close()
+    cod = _norm_ordem(codigo)
+    with _lista_lock:
+        item = _lista_por_material.get(cod)
+    if item:
+        return jsonify({'encontrado': True, 'material': item['material'],
+                        'texto_breve': item['texto_breve'], 'quantidade': item['quantidade']})
+    return jsonify({'encontrado': False, 'material': cod})
 
 
 @app.route('/api/prep/iniciar', methods=['POST'])
