@@ -13,7 +13,7 @@
   </div>
 </div>
 
-<!-- Modal de saída do banho -->
+<!-- Modal de confirmação de SAÍDA do banho -->
 <div class="modal-overlay" id="modalSaida">
   <div class="modal" style="max-width:440px;">
     <div class="modal-head">
@@ -34,18 +34,43 @@
     </div>
   </div>
 </div>
+
+<!-- Modal de confirmação INICIAR banho -->
+<div class="modal-overlay" id="modalIniciarConf">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-head">
+      <h5><i class="bi bi-play-circle-fill"></i>Iniciar banho — Cesto <span id="iCesto"></span></h5>
+      <button class="modal-x" onclick="fecharIniciarConf()"><i class="bi bi-x-lg"></i></button>
+    </div>
+    <div class="modal-body" style="text-align:center;padding:24px 20px;">
+      <p style="margin:0 0 8px;font-size:15px;">Confirma início do banho para este cesto?</p>
+      <p class="hint" style="margin:0;">O cronômetro do banho começará do zero.</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="fecharIniciarConf()" style="flex:0 0 auto;">Cancelar</button>
+      <button class="btn btn-aqua" style="flex:1;" onclick="confirmarIniciar()"><i class="bi bi-play-fill"></i>Iniciar</button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let ultimaFila=[];
+let idParaIniciar=null;
+let cestoParaIniciar='';
+
 function fmtTempo(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;const mm=String(m).padStart(2,'0'),xx=String(x).padStart(2,'0');return h>0?`${h}:${mm}:${xx}`:`${mm}:${xx}`;}
 
 async function carregar(){
-  const r=await fetch('/api/banho/fila'); const j=await r.json(); const agora=Date.now();
+  const r=await fetch('/api/banho/fila'); const j=await r.json();
+  /* Guarda o timestamp exato em que recebemos a resposta do servidor */
+  const agora=Date.now();
   ultimaFila=j.em_banho||[];
   const eb=document.getElementById('emBanho');
   eb.innerHTML=j.em_banho.length?j.em_banho.map(c=>{
+    /* Calcula segundos de banho apenas com base no banho_inicio_iso — ignora qualquer offset */
     const seg=c.banho_inicio_iso?Math.max(0,Math.floor((agora-new Date(c.banho_inicio_iso).getTime())/1000)):0;
     return `<div class="flow-card live">
       <div class="flow-left">
@@ -53,10 +78,11 @@ async function carregar(){
         <div class="flow-info">
           <div class="top">${c.processo||'Sem processo'} <span class="pill ${c.tipo==='Retrabalho'?'pill-retrab':'pill-normal'}">${c.tipo}</span></div>
           <div class="ln">${c.n_itens>1?('<strong>'+c.n_itens+' OPs</strong>'):('OP <strong>'+(c.ordem||'—')+'</strong>')} · ${c.qtd_total||0} pç</div>
+          <div class="ln muted" style="font-size:12px;">Operador: ${c.operador_banho_inicio||c.operador_banho||'—'}</div>
           <div class="cron cron-banho cron-el" data-ini="${c.banho_inicio_iso}">${fmtTempo(seg)}</div>
         </div>
       </div>
-      <button class="btn btn-stop btn-sm" onclick="finalizar(${c.id})"><i class="bi bi-stop-circle-fill"></i>Sair do banho</button>
+      <button class="btn btn-stop btn-sm" onclick="finalizar(${c.id},'${c.numero_cesto}')"><i class="bi bi-stop-circle-fill"></i>Sair do banho</button>
     </div>`;
   }).join(''):'<div class="empty panel"><i class="bi bi-droplet"></i>Nenhum cesto em banho.</div>';
 
@@ -72,18 +98,40 @@ async function carregar(){
           <div class="ln">${c.qtd_total||0} peças · prep ${c.prep_minutos} min</div>
         </div>
       </div>
-      <button class="btn btn-aqua btn-sm" onclick="iniciar(${c.id})"><i class="bi bi-play-fill"></i>Iniciar banho</button>
+      <button class="btn btn-aqua btn-sm" onclick="iniciar(${c.id},'${c.numero_cesto}')"><i class="bi bi-play-fill"></i>Iniciar banho</button>
     </div>`).join(''):'<div class="empty panel"><i class="bi bi-inbox"></i>Fila vazia.</div>';
 }
-function tick(){const a=Date.now();document.querySelectorAll('.cron-el[data-ini]').forEach(e=>{e.textContent=fmtTempo(Math.max(0,Math.floor((a-new Date(e.dataset.ini).getTime())/1000)));});}
 
-async function iniciar(id){await fetch('/api/banho/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});carregar();}
-function finalizar(id){
+function tick(){
+  const a=Date.now();
+  document.querySelectorAll('.cron-el[data-ini]').forEach(e=>{
+    if(!e.dataset.ini) return;
+    const seg=Math.max(0,Math.floor((a-new Date(e.dataset.ini).getTime())/1000));
+    e.textContent=fmtTempo(seg);
+  });
+}
+
+/* ── Iniciar banho com confirmação ── */
+function iniciar(id, cesto){
+  idParaIniciar=id;
+  cestoParaIniciar=cesto;
+  document.getElementById('iCesto').textContent=cesto;
+  document.getElementById('modalIniciarConf').classList.add('open');
+}
+function fecharIniciarConf(){document.getElementById('modalIniciarConf').classList.remove('open');idParaIniciar=null;}
+async function confirmarIniciar(){
+  if(!idParaIniciar) return;
+  await fetch('/api/banho/iniciar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:idParaIniciar})});
+  fecharIniciarConf();
+  carregar();
+}
+document.getElementById('modalIniciarConf').addEventListener('click',e=>{if(e.target.id==='modalIniciarConf')fecharIniciarConf();});
+
+/* ── Finalizar banho ── */
+function finalizar(id, cesto){
   document.getElementById('sId').value=id;
   document.getElementById('sObs').value='';
-  // mostra o nº do cesto no título
-  const card=ultimaFila.find(c=>c.id===id);
-  document.getElementById('sCesto').textContent=card?card.numero_cesto:'';
+  document.getElementById('sCesto').textContent=cesto||'';
   document.getElementById('modalSaida').classList.add('open');
 }
 function fecharSaida(){document.getElementById('modalSaida').classList.remove('open');}

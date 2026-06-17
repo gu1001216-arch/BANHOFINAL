@@ -38,19 +38,17 @@ app.secret_key = os.environ.get('SECRET_KEY', 'troque-esta-chave-em-producao')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Lista mestra em memória (carregada do arquivo — sem banco de dados)
-# Coloque lista_mestra.xlsx (ou .csv / .txt tab-separado) na raiz do projeto.
-# Para atualizar: substitua o arquivo e faça redeploy no Railway.
 # ─────────────────────────────────────────────────────────────────────────────
 _lista_lock = threading.Lock()
-_lista_por_ordem = {}    # {ordem_normalizada: dict}
-_lista_por_material = {} # {material: dict}  — para busca por código
+_lista_por_ordem = {}
+_lista_por_material = {}
 _lista_status = {'carregada': False, 'total': 0, 'erro': None}
 
 LISTA_MESTRA_ARQUIVOS = [
     'lista_mestra.xlsx',
     'lista_mestra.csv',
     'lista_mestra.txt',
-    'exemplo_lista_mestra_sap.txt',  # fallback para desenvolvimento
+    'exemplo_lista_mestra_sap.txt',
 ]
 
 
@@ -73,7 +71,6 @@ def _achar_arquivo_mestre():
 
 
 def _parsear_linhas_mestre(linhas):
-    """Recebe lista de listas (linhas já lidas) e retorna (por_ordem, por_material)."""
     achado = _achar_colunas(linhas)
     if achado:
         cab_idx, col = achado
@@ -114,7 +111,6 @@ def _parsear_linhas_mestre(linhas):
 
 
 def carregar_lista_mestre():
-    """Carrega (ou recarrega) a lista mestra do arquivo para a memória."""
     global _lista_por_ordem, _lista_por_material, _lista_status
     caminho = _achar_arquivo_mestre()
     if not caminho:
@@ -168,10 +164,10 @@ PROCESSOS = [
     "MINIMIZADO SEM OXIDAÇÃO", "MINIMIZADO COM OXIDAÇÃO", "INOX",
 ]
 
-ST_PREPARANDO = 'PREPARANDO'   # cronômetro rodando
-ST_PREENCHER = 'PREENCHER'     # tempo parado, aguardando dados
-ST_FILA_BANHO = 'FILA_BANHO'   # aguardando banho
-ST_EM_BANHO = 'EM_BANHO'       # em banho
+ST_PREPARANDO = 'PREPARANDO'
+ST_PREENCHER = 'PREENCHER'
+ST_FILA_BANHO = 'FILA_BANHO'
+ST_EM_BANHO = 'EM_BANHO'
 ST_CONCLUIDO = 'CONCLUIDO'
 ESTADOS_ATIVOS = (ST_PREPARANDO, ST_PREENCHER, ST_FILA_BANHO, ST_EM_BANHO)
 
@@ -185,22 +181,21 @@ class Usuario(Base):
     login = Column(String(50), unique=True, nullable=False)
     nome = Column(String(120), nullable=False)
     senha_hash = Column(String(255), nullable=False)
-    perfil = Column(String(20), nullable=False)  # admin, prep, banho
+    perfil = Column(String(20), nullable=False)
 
     def to_dict(self):
         return {'id': self.id, 'login': self.login, 'nome': self.nome, 'perfil': self.perfil}
 
 
-
 def _pausas_resumo(pausas_json):
-    """Converte {motivo: segundos} em lista [{motivo, minutos}] + texto resumido."""
     try:
         mapa = json.loads(pausas_json) if pausas_json else {}
     except (ValueError, TypeError):
         mapa = {}
     lista = [{'motivo': m, 'minutos': round(s / 60, 1)} for m, s in mapa.items()]
     texto = '; '.join(f"{x['motivo']}: {x['minutos']} min" for x in lista)
-    return {'lista': lista, 'texto': texto}
+    total_seg = sum(mapa.values())
+    return {'lista': lista, 'texto': texto, 'total_seg': total_seg}
 
 
 class Card(Base):
@@ -212,7 +207,6 @@ class Card(Base):
     processo = Column(String(60), default='')
     tipo = Column(String(20), default='Normal')
 
-    # 1ª OP nos campos diretos (compatível com Excel/histórico); lista completa em itens_json
     ordem = Column(String(60), default='')
     material = Column(String(60), default='')
     texto_breve = Column(String(255), default='')
@@ -220,9 +214,14 @@ class Card(Base):
     itens_json = Column(Text, default='')
     observacao = Column(Text, default='')
 
-    operador_prep = Column(String(120), default='')    # operador 1
-    operador_prep2 = Column(String(120), default='')   # operador 2 (opcional)
+    operador_prep = Column(String(120), default='')
+    operador_prep2 = Column(String(120), default='')
     n_operadores = Column(Integer, default=1)
+    # operador que INICIOU o banho
+    operador_banho_inicio = Column(String(120), default='')
+    # operador que FINALIZOU o banho
+    operador_banho_fim = Column(String(120), default='')
+    # campo legado (mantido para compatibilidade)
     operador_banho = Column(String(120), default='')
 
     prep_inicio = Column(DateTime)
@@ -231,20 +230,26 @@ class Card(Base):
 
     pausado = Column(Integer, default=0)
     pausa_inicio = Column(DateTime)
-    pausa_motivo = Column(String(60), default='')   # motivo da pausa atual
+    pausa_motivo = Column(String(60), default='')
     pausa_acumulada_seg = Column(Integer, default=0)
-    pausas_json = Column(Text, default='')          # {motivo: segundos_totais}
+    pausas_json = Column(Text, default='')
 
     banho_inicio = Column(DateTime)
     banho_fim = Column(DateTime)
     banho_minutos = Column(Float, default=0)
-    obs_banho = Column(Text, default='')   # observação registrada na saída do banho
+    obs_banho = Column(Text, default='')
 
     criado_em = Column(DateTime, default=datetime.utcnow)
 
     def to_dict(self):
         def fmt(dt):
             return (dt - timedelta(hours=3)).strftime('%d/%m/%Y %H:%M:%S') if dt else ''
+
+        def fmt_data(dt):
+            return (dt - timedelta(hours=3)).strftime('%d/%m/%Y') if dt else ''
+
+        def fmt_hora(dt):
+            return (dt - timedelta(hours=3)).strftime('%H:%M:%S') if dt else ''
 
         def iso(dt):
             return dt.isoformat() + 'Z' if dt else ''
@@ -256,6 +261,8 @@ class Card(Base):
             itens = [{'ordem': self.ordem, 'material': self.material,
                       'texto_breve': self.texto_breve, 'quantidade': self.quantidade}]
         qtd_total = sum(int(i.get('quantidade') or 0) for i in itens) if itens else (self.quantidade or 0)
+        pausas = _pausas_resumo(self.pausas_json)
+        total_pausa_min = round(pausas['total_seg'] / 60, 1)
         return {
             'id': self.id, 'estado': self.estado,
             'numero_cesto': self.numero_cesto,
@@ -267,10 +274,17 @@ class Card(Base):
             'obs_banho': self.obs_banho or '',
             'operador_prep': self.operador_prep, 'operador_prep2': self.operador_prep2 or '',
             'n_operadores': self.n_operadores or 1,
-            'operador_banho': self.operador_banho,
+            'operador_banho': self.operador_banho or '',
+            'operador_banho_inicio': self.operador_banho_inicio or self.operador_banho or '',
+            'operador_banho_fim': self.operador_banho_fim or '',
             'prep_inicio': fmt(self.prep_inicio), 'prep_fim': fmt(self.prep_fim),
             'prep_minutos': round(self.prep_minutos or 0, 1),
+            'total_pausa_min': total_pausa_min,
             'banho_inicio': fmt(self.banho_inicio), 'banho_fim': fmt(self.banho_fim),
+            'banho_inicio_data': fmt_data(self.banho_inicio),
+            'banho_inicio_hora': fmt_hora(self.banho_inicio),
+            'banho_fim_data': fmt_data(self.banho_fim),
+            'banho_fim_hora': fmt_hora(self.banho_fim),
             'banho_minutos': round(self.banho_minutos or 0, 1),
             'prep_inicio_iso': iso(self.prep_inicio),
             'banho_inicio_iso': iso(self.banho_inicio),
@@ -278,7 +292,7 @@ class Card(Base):
             'pausa_inicio_iso': iso(self.pausa_inicio),
             'pausa_motivo': self.pausa_motivo or '',
             'pausa_acumulada_seg': self.pausa_acumulada_seg or 0,
-            'pausas': _pausas_resumo(self.pausas_json),
+            'pausas': pausas,
             'data_ref': (self.banho_fim - timedelta(hours=3)).strftime('%Y-%m-%d') if self.banho_fim else '',
         }
 
@@ -287,7 +301,6 @@ class Card(Base):
 # Init + migração + seed
 # ─────────────────────────────────────────────────────────────────────────────
 def _migrar_colunas():
-    """Cria colunas novas em tabelas que já existem (deploy sobre banco antigo)."""
     insp = inspect(engine)
     if 'cards' not in insp.get_table_names():
         return
@@ -298,6 +311,8 @@ def _migrar_colunas():
         'pausa_inicio': 'TIMESTAMP NULL', 'pausa_acumulada_seg': 'INTEGER DEFAULT 0',
         'pausa_motivo': "VARCHAR(60) DEFAULT ''", 'pausas_json': 'TEXT',
         'obs_banho': 'TEXT',
+        'operador_banho_inicio': "VARCHAR(120) DEFAULT ''",
+        'operador_banho_fim': "VARCHAR(120) DEFAULT ''",
     }
     with engine.begin() as conn:
         for col, tipo in novas.items():
@@ -308,11 +323,10 @@ def _migrar_colunas():
                     pass
 
 
-
 def init_db():
     Base.metadata.create_all(engine)
     _migrar_colunas()
-    carregar_lista_mestre()  # carrega a lista mestra do arquivo em memória
+    carregar_lista_mestre()
     db = Session()
     try:
         if db.query(Usuario).count() == 0:
@@ -345,7 +359,13 @@ def _norm_ordem(v):
     s = str(v).strip()
     if s.endswith('.0'):
         s = s[:-2]
-    return s
+    # Remove 4 dígitos do início e 4 dígitos do fim se o resultado tiver 8 dígitos (ou mais)
+    # Ex: código de barras com 16 dígitos: XXXX[8digitos]XXXX -> extrai os 8 do meio
+    s_digits = ''.join(c for c in s if c.isdigit())
+    if len(s_digits) > 8:
+        # Remove 4 prefixos e 4 sufixos numéricos
+        s_digits = s_digits[4:-4]
+    return s_digits if s_digits else s
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -493,13 +513,9 @@ def api_admin_testar_op(ordem):
 
 
 def _achar_colunas(linhas):
-    """
-    Procura a linha de cabeçalho e mapeia as colunas pelos nomes do SAP.
-    Retorna (idx_cabecalho, {ordem, material, texto, qtd}) ou None se não achar.
-    """
     def norm(s):
         return str(s).strip().lower() if s is not None else ''
-    for i, row in enumerate(linhas[:10]):  # cabeçalho costuma estar nas 1ªs linhas
+    for i, row in enumerate(linhas[:10]):
         if not row:
             continue
         nomes = [norm(c) for c in row]
@@ -514,12 +530,9 @@ def _achar_colunas(linhas):
             elif ('quantidade da ordem' in nome or nome == 'quantidade total'
                   or nome == 'quantidade') and 'qtd' not in idx:
                 idx['qtd'] = j
-        if 'ordem' in idx and 'material' in idx:  # cabeçalho válido
+        if 'ordem' in idx and 'material' in idx:
             return i, idx
     return None
-
-
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -563,7 +576,6 @@ def api_buscar_ordem(ordem):
 @app.route('/api/buscar_codigo/<path:codigo>')
 @login_required('prep', 'banho')
 def api_buscar_codigo(codigo):
-    """Busca a descrição pelo código (Material), p/ itens sem OP."""
     cod = _norm_ordem(codigo)
     with _lista_lock:
         item = _lista_por_material.get(cod)
@@ -615,7 +627,6 @@ def api_prep_pausar():
             return jsonify({'sucesso': False, 'erro': 'Cesto não está em preparação.'}), 404
         agora = datetime.utcnow()
         if card.pausado:
-            # retomar: soma o tempo desta pausa no motivo correspondente
             if card.pausa_inicio:
                 dur = int((agora - card.pausa_inicio).total_seconds())
                 card.pausa_acumulada_seg = (card.pausa_acumulada_seg or 0) + dur
@@ -630,7 +641,6 @@ def api_prep_pausar():
             card.pausa_inicio = None
             card.pausa_motivo = ''
         else:
-            # pausar: exige um motivo
             motivo = (d.get('motivo') or '').strip()
             if not motivo:
                 return jsonify({'sucesso': False, 'erro': 'Informe o motivo da pausa.'}), 400
@@ -677,10 +687,8 @@ def api_prep_parar():
 
 
 def _salvar_itens(card, d):
-    """Recebe lista de itens (OPs) e grava em itens_json + campos diretos (1ª OP)."""
     itens = d.get('itens')
     if itens is None:
-        # compatibilidade: item único vindo de campos soltos
         itens = [{'ordem': d.get('ordem', ''), 'material': d.get('material', ''),
                   'texto_breve': d.get('texto_breve', ''), 'quantidade': d.get('quantidade', 0)}]
     norm = []
@@ -699,7 +707,7 @@ def _salvar_itens(card, d):
         card.ordem = norm[0]['ordem']
         card.material = norm[0]['material']
         card.texto_breve = norm[0]['texto_breve']
-        card.quantidade = sum(i['quantidade'] for i in norm)  # qtd total do cesto
+        card.quantidade = sum(i['quantidade'] for i in norm)
 
 
 def _aplicar_meta(card, d):
@@ -753,7 +761,6 @@ def api_card_editar():
                 card.prep_minutos = round(float(d.get('prep_minutos')), 1)
             except (ValueError, TypeError):
                 pass
-        # editar nº de operadores (1, 2 ou 3)
         if 'n_operadores' in d:
             try:
                 n = int(d.get('n_operadores'))
@@ -789,7 +796,9 @@ def api_banho_iniciar():
         if not card or card.estado != ST_FILA_BANHO:
             return jsonify({'sucesso': False, 'erro': 'Card não está na fila.'}), 404
         card.banho_inicio = datetime.utcnow()
-        card.operador_banho = session.get('nome', '')
+        nome_op = session.get('nome', '')
+        card.operador_banho_inicio = nome_op
+        card.operador_banho = nome_op  # compatibilidade
         card.estado = ST_EM_BANHO
         db.commit()
         return jsonify({'sucesso': True})
@@ -809,6 +818,8 @@ def api_banho_finalizar():
         card.banho_fim = datetime.utcnow()
         card.banho_minutos = round((card.banho_fim - card.banho_inicio).total_seconds() / 60, 1)
         card.obs_banho = (d.get('obs_banho') or '').strip()
+        nome_op = session.get('nome', '')
+        card.operador_banho_fim = nome_op
         card.estado = ST_CONCLUIDO
         db.commit()
         return jsonify({'sucesso': True, 'banho_minutos': card.banho_minutos})
@@ -881,7 +892,7 @@ def api_painel_dados():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Export Excel (uma linha por OP, para detalhar cestos com várias OPs)
+# Export Excel
 # ─────────────────────────────────────────────────────────────────────────────
 def _estilo_cabecalho(ws, headers):
     fill = PatternFill("solid", fgColor="0F3D5C")
@@ -902,35 +913,79 @@ def _gerar_excel(tipo):
         cards = db.query(Card).filter_by(estado=ST_CONCLUIDO).order_by(Card.id).all()
         wb = Workbook()
         ws = wb.active
+
         if tipo == 'prebanho':
             ws.title = 'Pre-Banho'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
-                       'Processo', 'Tipo', 'Operador', 'Nº oper.',
-                       'Início', 'Fim', 'Tempo prep (min)', 'Pausas (por motivo)', 'Observação']
-            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 9, 19, 19, 13, 30, 28]
-        else:
+                       'Processo', 'Tipo', 'Operador Prep', 'Nº oper.',
+                       'Início', 'Fim', 'Tempo prep (min)', 'Tempo parada (min)',
+                       'Pausas (por motivo)', 'Observação']
+            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 9, 19, 19, 13, 14, 30, 28]
+
+        elif tipo == 'banho':
             ws.title = 'Banho'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
-                       'Processo', 'Tipo', 'Operador banho',
-                       'Início banho', 'Fim banho', 'Tempo banho (min)', 'Observação banho']
-            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 19, 19, 14, 28]
+                       'Processo', 'Tipo',
+                       'Operador Banho Início', 'Operador Banho Fim',
+                       'Início Banho - Data', 'Início Banho - Hora',
+                       'Final Banho - Data', 'Final Banho - Hora',
+                       'Tempo banho (min)', 'Observação banho']
+            larg = [6, 7, 14, 14, 30, 7, 22, 12, 20, 20, 16, 14, 16, 14, 14, 28]
+
+        else:  # geral
+            ws.title = 'Geral'
+            headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
+                       'Processo', 'Tipo',
+                       'Operador Prep', 'Nº oper.',
+                       'Início Prep', 'Fim Prep', 'Tempo prep (min)', 'Tempo parada (min)',
+                       'Operador Banho Início', 'Operador Banho Fim',
+                       'Início Banho - Data', 'Início Banho - Hora',
+                       'Final Banho - Data', 'Final Banho - Hora',
+                       'Tempo banho (min)', 'Total prep+banho (min)',
+                       'Observação Prep', 'Observação Banho']
+            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 9, 19, 19, 13, 14, 20, 20, 16, 14, 16, 14, 14, 16, 28, 28]
+
         _estilo_cabecalho(ws, headers)
+
         for c in cards:
             dd = c.to_dict()
             itens = dd['itens'] or [{'ordem': dd['ordem'], 'material': dd['material'],
                                      'texto_breve': dd['texto_breve'], 'quantidade': dd['quantidade']}]
-            for it in itens:  # uma linha por OP
+            total_prep_banho = round((dd['prep_minutos'] or 0) + (dd['banho_minutos'] or 0), 1)
+
+            for it in itens:
                 if tipo == 'prebanho':
-                    ws.append([dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
-                               it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
-                               dd['operador_prep'], dd['n_operadores'],
-                               dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
-                               dd['pausas']['texto'], dd['observacao']])
-                else:
-                    ws.append([dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
-                               it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
-                               dd['operador_banho'], dd['banho_inicio'], dd['banho_fim'],
-                               dd['banho_minutos'], dd['obs_banho']])
+                    ws.append([
+                        dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
+                        it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
+                        dd['operador_prep'], dd['n_operadores'],
+                        dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
+                        dd['total_pausa_min'],
+                        dd['pausas']['texto'], dd['observacao']
+                    ])
+                elif tipo == 'banho':
+                    ws.append([
+                        dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
+                        it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
+                        dd['operador_banho_inicio'], dd['operador_banho_fim'],
+                        dd['banho_inicio_data'], dd['banho_inicio_hora'],
+                        dd['banho_fim_data'], dd['banho_fim_hora'],
+                        dd['banho_minutos'], dd['obs_banho']
+                    ])
+                else:  # geral
+                    ws.append([
+                        dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
+                        it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
+                        dd['operador_prep'], dd['n_operadores'],
+                        dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
+                        dd['total_pausa_min'],
+                        dd['operador_banho_inicio'], dd['operador_banho_fim'],
+                        dd['banho_inicio_data'], dd['banho_inicio_hora'],
+                        dd['banho_fim_data'], dd['banho_fim_hora'],
+                        dd['banho_minutos'], total_prep_banho,
+                        dd['observacao'], dd['obs_banho']
+                    ])
+
         for i, w in enumerate(larg, 1):
             ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
         ws.freeze_panes = 'A2'
@@ -957,6 +1012,15 @@ def download_banho():
     buf = _gerar_excel('banho')
     stamp = datetime.now().strftime('%Y%m%d_%H%M')
     return send_file(buf, as_attachment=True, download_name=f'banho_{stamp}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/api/download/geral')
+@login_required('admin')
+def download_geral():
+    buf = _gerar_excel('geral')
+    stamp = datetime.now().strftime('%Y%m%d_%H%M')
+    return send_file(buf, as_attachment=True, download_name=f'relatorio_geral_{stamp}.xlsx',
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
