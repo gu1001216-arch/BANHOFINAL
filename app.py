@@ -77,7 +77,7 @@ class ItemMestre(Base):
     __tablename__ = 'itens_mestre'
     id = Column(Integer, primary_key=True)
     ordem = Column(String(60), unique=True, nullable=False, index=True)  # OP
-    material = Column(String(60), default='')                            # código
+    material = Column(String(60), default='', index=True)                # código
     texto_breve = Column(String(255), default='')                        # descrição
     quantidade = Column(Integer, default=0)
 
@@ -200,6 +200,11 @@ def _migrar_colunas():
                     conn.execute(text(f'ALTER TABLE cards ADD COLUMN {col} {tipo}'))
                 except Exception:
                     pass
+        # índice em itens_mestre.material (busca por código quando não tem OP)
+        try:
+            conn.execute(text('CREATE INDEX IF NOT EXISTS ix_itens_mestre_material ON itens_mestre (material)'))
+        except Exception:
+            pass
 
 
 def init_db():
@@ -510,6 +515,22 @@ def api_buscar_ordem(ordem):
         if item:
             return jsonify({'encontrado': True, **item.to_dict()})
         return jsonify({'encontrado': False, 'ordem': _norm_ordem(ordem)})
+    finally:
+        db.close()
+
+
+@app.route('/api/buscar_codigo/<path:codigo>')
+@login_required('prep', 'banho')
+def api_buscar_codigo(codigo):
+    """Busca a descrição pelo código (Material), p/ itens sem OP."""
+    db = Session()
+    try:
+        cod = _norm_ordem(codigo)  # mesma normalização (tira espaços e .0)
+        item = db.query(ItemMestre).filter_by(material=cod).first()
+        if item:
+            return jsonify({'encontrado': True, 'material': item.material,
+                            'texto_breve': item.texto_breve, 'quantidade': item.quantidade})
+        return jsonify({'encontrado': False, 'material': cod})
     finally:
         db.close()
 
