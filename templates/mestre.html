@@ -6,23 +6,36 @@
   {% if msg %}<div class="alert alert-info"><i class="bi bi-info-circle-fill"></i>{{ msg }}</div>{% endif %}
 
   <div class="panel panel-pad" style="margin-bottom:20px;">
-    <div class="section-title" style="font-size:1rem;margin-bottom:10px;"><i class="bi bi-cloud-arrow-up"></i>Importar relatório</div>
+    <div class="section-title" style="font-size:1rem;margin-bottom:10px;"><i class="bi bi-file-earmark-spreadsheet"></i>Arquivo em uso</div>
     <p class="small muted" style="margin-bottom:16px;">
-      Exporte o relatório do SAP em <strong>.xlsx</strong> ou <strong>.csv/.txt</strong> (separado por TAB).
-      O sistema identifica as colunas pelo nome no cabeçalho: <code>Ordem</code> (OP), <code>Material</code> (código), <code>Texto breve material</code> (descrição) e <code>Quantidade da ordem</code>. Pode exportar o relatório do SAP direto — a ordem das colunas não importa.
-      Ordens já cadastradas são atualizadas; novas são adicionadas. Ao bipar a OP na tela de preparação, esses dados são preenchidos automaticamente.
+      A lista mestra é carregada <strong>diretamente do arquivo</strong> no repositório ao iniciar o servidor.
+      Para atualizar: substitua o arquivo <code>lista_mestra.xlsx</code> (ou <code>.csv</code>/<code>.txt</code>) na raiz do projeto, faça commit e redeploy no Railway.<br><br>
+      O sistema detecta as colunas pelo nome no cabeçalho: <code>Ordem</code>, <code>Material</code>, <code>Texto breve material</code> e <code>Quantidade da ordem</code> — a ordem das colunas não importa.
     </p>
-    <form method="POST" enctype="multipart/form-data">
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <input type="file" class="input input-sm" name="arquivo" accept=".xlsx,.csv,.txt" required style="flex:1;min-width:200px;">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-upload"></i>Importar</button>
+
+    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 16px;background:var(--bg-card, #1e2330);border-radius:8px;border:1px solid var(--line);">
+      <div>
+        <span class="small muted">Arquivo detectado:</span><br>
+        <strong>{{ arquivo_info }}</strong>
       </div>
-    </form>
+      <div>
+        <span class="small muted">Status:</span><br>
+        {% if status.carregada %}
+          <span class="pill pill-banho"><i class="bi bi-check-circle-fill"></i> Carregada — {{ total_itens }} ordens</span>
+        {% else %}
+          <span class="pill pill-prep"><i class="bi bi-exclamation-triangle-fill"></i> Erro: {{ status.erro }}</span>
+        {% endif %}
+      </div>
+      <form method="POST" style="margin-left:auto;">
+        <input type="hidden" name="acao" value="recarregar">
+        <button class="btn btn-secondary" type="submit"><i class="bi bi-arrow-clockwise"></i>Recarregar da memória</button>
+      </form>
+    </div>
   </div>
 
   <div class="panel" style="overflow:hidden;">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);">
-      <span class="section-title" style="font-size:1rem;">Ordens cadastradas</span>
+      <span class="section-title" style="font-size:1rem;">Ordens em memória (amostra)</span>
       <span class="pill pill-banho">{{ total_itens }} ordens</span>
     </div>
     <div class="table-wrap">
@@ -32,12 +45,12 @@
           {% for i in amostra %}
           <tr><td><strong>{{ i.ordem }}</strong></td><td>{{ i.material }}</td><td><span class="small">{{ i.texto_breve }}</span></td><td class="mono">{{ i.quantidade }}</td></tr>
           {% else %}
-          <tr><td colspan="4" class="empty"><i class="bi bi-inbox"></i>Nenhuma ordem importada ainda.</td></tr>
+          <tr><td colspan="4" class="empty"><i class="bi bi-inbox"></i>Nenhuma ordem carregada. Verifique se o arquivo existe na raiz do projeto.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-    {% if total_itens > amostra|length %}<p class="small muted" style="padding:12px 20px;margin:0;">Mostrando {{ amostra|length }} de {{ total_itens }} ordens.</p>{% endif %}
+    {% if total_itens > amostra|length %}<p class="small muted" style="padding:12px 20px;margin:0;">Mostrando {{ amostra|length }} de {{ total_itens }} ordens em memória.</p>{% endif %}
   </div>
 </div>
 {% endblock %}
