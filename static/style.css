@@ -209,6 +209,7 @@ textarea.input{min-height:auto;resize:vertical;}
 .kpi.k-sky::after{background:var(--sky);}
 .kpi.k-green::after{background:var(--green);}
 .kpi.k-red::after{background:var(--red);}
+.kpi.k-teal::after{background:#0EA5A0;}
 .kpi-val{font-family:'JetBrains Mono',monospace;font-size:2.1rem;font-weight:800;color:var(--aco-900);line-height:1;}
 .kpi-lbl{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--slate);margin-top:8px;display:flex;align-items:center;gap:5px;}
 
@@ -328,3 +329,47 @@ textarea.input{min-height:auto;resize:vertical;}
 .item-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .item-grid-full{grid-column:1/-1;}
 .mini-label{font-size:.68rem;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:3px;}
+
+/* ════════════════════════════════════════════════════════════
+   Tela de banho — colunas responsivas (Samsung Tab A9)
+   ════════════════════════════════════════════════════════════ */
+.banho-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;}
+/* tablet retrato e telas estreitas: empilha as duas colunas */
+@media(max-width:1024px){
+  .banho-cols{grid-template-columns:1fr;}
+}
+/* o texto das linhas pode quebrar em vez de cortar */
+.flow-info .ln{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35;}
+.flow-card{flex-wrap:wrap;}
+.flow-card .btn{flex:1 1 auto;}
+@media(min-width:641px){
+  .flow-card .btn{flex:0 0 auto;}
+}
+/* em telas estreitas, o botão de ação ocupa a largura toda embaixo */
+@media(max-width:640px){
+  .flow-left{flex:1 1 100%;}
+  .flow-card .btn{width:100%;justify-content:center;}
+  .cesto-badge{width:52px;height:52px;font-size:1.4rem;}
+  .cron{font-size:1.5rem;}
+}
+
+/* KPIs: 2 colunas no tablet retrato, sem espremer */
+@media(max-width:1024px){
+  .kpi-row{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:640px){
+  .kpi-row{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .kpi-val{font-size:1.7rem;}
+}
+
+/* dois gráficos lado a lado viram um por linha no tablet */
+@media(max-width:1024px){
+  .chart-grid{grid-template-columns:1fr!important;}
+}
+
+/* tabela com rolagem horizontal suave no toque */
+.table-wrap{-webkit-overflow-scrolling:touch;}
+
+/* evita que qualquer container estoure a largura da tela */
+.page,.panel,.flow-card,.kpi,.chart-box{max-width:100%;}
+img,canvas{max-width:100%;}

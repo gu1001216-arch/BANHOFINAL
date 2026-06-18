@@ -2,7 +2,7 @@
 {% block title %}Banho — Controle Produtividade{% endblock %}
 {% block content %}
 
-<div class="chart-grid" style="grid-template-columns:1fr 1fr;align-items:start;">
+<div class="banho-cols">
   <div>
     <div class="section-title" style="margin-bottom:14px;"><i class="bi bi-droplet-fill"></i>Em banho agora</div>
     <div id="emBanho" class="flow-list"><div class="muted small">Carregando…</div></div>
@@ -78,7 +78,7 @@ async function carregar(){
         <div class="flow-info">
           <div class="top">${c.processo||'Sem processo'} <span class="pill ${c.tipo==='Retrabalho'?'pill-retrab':'pill-normal'}">${c.tipo}</span></div>
           <div class="ln">${c.n_itens>1?('<strong>'+c.n_itens+' OPs</strong>'):('OP <strong>'+(c.ordem||'—')+'</strong>')} · ${c.qtd_total||0} pç</div>
-          <div class="ln muted" style="font-size:12px;">Operador: ${c.operador_banho_inicio||c.operador_banho||'—'}</div>
+          <div class="ln muted" style="font-size:12px;">${c.peso_total||0} kg · ${c.area_total||0} m² · Op: ${c.operador_banho_inicio||c.operador_banho||'—'}</div>
           <div class="cron cron-banho cron-el" data-ini="${c.banho_inicio_iso}">${fmtTempo(seg)}</div>
         </div>
       </div>
@@ -95,7 +95,8 @@ async function carregar(){
         <div class="flow-info">
           <div class="top">${c.processo||'Sem processo'}</div>
           <div class="ln">${c.n_itens>1?('<strong>'+c.n_itens+' OPs</strong> · '+(c.texto_breve||'')):('OP <strong>'+(c.ordem||'—')+'</strong> · '+(c.texto_breve||''))}</div>
-          <div class="ln">${c.qtd_total||0} peças · prep ${c.prep_minutos} min</div>
+          <div class="ln">${c.qtd_total||0} peças · ${c.peso_total||0} kg · ${c.area_total||0} m²</div>
+          <div class="ln muted" style="font-size:12px;">prep ${c.prep_minutos} min</div>
         </div>
       </div>
       <button class="btn btn-aqua btn-sm" onclick="iniciar(${c.id},'${c.numero_cesto}')"><i class="bi bi-play-fill"></i>Iniciar banho</button>

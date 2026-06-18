@@ -29,6 +29,8 @@
     <div class="kpi k-red"><div class="kpi-val" id="kRetrab">0</div><div class="kpi-lbl"><i class="bi bi-arrow-repeat"></i>Retrabalhos</div></div>
     <div class="kpi k-violet"><div class="kpi-val" id="kPrep">0</div><div class="kpi-lbl"><i class="bi bi-stopwatch"></i>Méd. prep (min)</div></div>
     <div class="kpi k-sky"><div class="kpi-val" id="kBanho">0</div><div class="kpi-lbl"><i class="bi bi-droplet"></i>Méd. banho (min)</div></div>
+    <div class="kpi k-teal"><div class="kpi-val" id="kPeso">0</div><div class="kpi-lbl"><i class="bi bi-box-seam"></i>Peso total (kg)</div></div>
+    <div class="kpi k-teal"><div class="kpi-val" id="kArea">0</div><div class="kpi-lbl"><i class="bi bi-rulers"></i>Área total (m²)</div></div>
   </div>
 
   <div class="panel panel-pad" style="margin-bottom:18px;">
@@ -40,6 +42,11 @@
     <div class="chart-box"><h6><i class="bi bi-pie-chart-fill"></i>Normal × Retrabalho</h6><canvas id="chartTipo" height="200"></canvas></div>
     <div class="chart-box"><h6><i class="bi bi-bar-chart-fill"></i>Por processo</h6><canvas id="chartProc" height="200"></canvas></div>
     <div class="chart-box"><h6><i class="bi bi-graph-up"></i>Concluídos por dia</h6><canvas id="chartDia" height="200"></canvas></div>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-box"><h6><i class="bi bi-box-seam"></i>Peso processado por dia (kg)</h6><canvas id="chartPeso" height="180"></canvas></div>
+    <div class="chart-box"><h6><i class="bi bi-rulers"></i>Área processada por dia (m²)</h6><canvas id="chartArea" height="180"></canvas></div>
   </div>
 </main>
 

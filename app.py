@@ -110,6 +110,99 @@ def _parsear_linhas_mestre(linhas):
     return por_ordem, por_material
 
 
+# ── Área/Peso por código SAP (mesma abordagem: arquivo em memória) ──────────
+_areapeso_por_sap = {}
+_areapeso_status = {'carregada': False, 'total': 0, 'erro': None}
+AREA_PESO_ARQUIVOS = ['area_peso.xlsx', 'area_peso.csv', 'area_peso.txt']
+
+
+def _achar_arquivo_areapeso():
+    base = os.path.dirname(os.path.abspath(__file__))
+    for nome in AREA_PESO_ARQUIVOS:
+        caminho = os.path.join(base, nome)
+        if os.path.isfile(caminho):
+            return caminho
+    return None
+
+
+def carregar_area_peso():
+    """Carrega area_peso (Codigo SAP -> área superfície e peso unitários)."""
+    global _areapeso_por_sap, _areapeso_status
+    caminho = _achar_arquivo_areapeso()
+    if not caminho:
+        _areapeso_status = {'carregada': False, 'total': 0, 'erro': 'Arquivo area_peso não encontrado.'}
+        print('[area_peso] AVISO: nenhum arquivo encontrado.')
+        return
+    try:
+        linhas = []
+        nome = caminho.lower()
+        if nome.endswith('.csv') or nome.endswith('.txt'):
+            with open(caminho, encoding='utf-8-sig', errors='replace') as f:
+                raw = f.read()
+            sep = '\t' if raw.count('\t') > raw.count(';') and raw.count('\t') > raw.count(',') \
+                else (';' if raw.count(';') > raw.count(',') else ',')
+            linhas = list(csv.reader(io.StringIO(raw), delimiter=sep))
+        else:
+            from openpyxl import load_workbook as _lw
+            wb = _lw(caminho, read_only=True, data_only=True)
+            ws = wb.active
+            for row in ws.iter_rows(values_only=True):
+                linhas.append(list(row))
+
+        # detecta colunas pelo nome do cabeçalho
+        def norm(s):
+            return str(s).strip().lower() if s is not None else ''
+        i_sap = i_area = i_peso = None
+        inicio = 0
+        for i, row in enumerate(linhas[:10]):
+            if not row:
+                continue
+            nomes = [norm(c) for c in row]
+            for j, n in enumerate(nomes):
+                if 'codigo sap' in n or 'código sap' in n:
+                    i_sap = j
+                elif 'area' in n or 'área' in n:
+                    i_area = j
+                elif 'peso' in n:
+                    i_peso = j
+            if i_sap is not None:
+                inicio = i + 1
+                break
+        if i_sap is None:  # fallback p/ a ordem do arquivo: Codigo, Area, Peso, Codigo Sap
+            i_sap, i_area, i_peso, inicio = 3, 1, 2, 1
+
+        mapa = {}
+        for row in linhas[inicio:]:
+            if not row or all(c is None or str(c).strip() == '' for c in row):
+                continue
+            sap = _norm_str(row[i_sap]) if i_sap is not None and i_sap < len(row) else ''
+            if not sap:
+                continue
+            def num(idx):
+                try:
+                    return float(row[idx]) if idx is not None and idx < len(row) and row[idx] not in (None, '') else 0.0
+                except (ValueError, TypeError):
+                    return 0.0
+            area_mm2 = num(i_area)
+            peso_kg = num(i_peso)
+            mapa[sap] = {'area_m2': area_mm2 / 1_000_000.0,  # mm² -> m²
+                         'peso_kg': peso_kg}
+        _areapeso_por_sap = mapa
+        _areapeso_status = {'carregada': True, 'total': len(mapa), 'erro': None}
+        print(f'[area_peso] Carregada: {len(mapa)} códigos de "{os.path.basename(caminho)}".')
+    except Exception as e:
+        _areapeso_status = {'carregada': False, 'total': 0, 'erro': str(e)}
+        print(f'[area_peso] ERRO ao carregar: {e}')
+
+
+def _area_peso_do_codigo(material):
+    """Retorna (area_m2, peso_kg) unitários para um código SAP, ou (0,0)."""
+    d = _areapeso_por_sap.get(_norm_str(material))
+    if d:
+        return d['area_m2'], d['peso_kg']
+    return 0.0, 0.0
+
+
 def carregar_lista_mestre():
     global _lista_por_ordem, _lista_por_material, _lista_status
     caminho = _achar_arquivo_mestre()
@@ -261,6 +354,14 @@ class Card(Base):
             itens = [{'ordem': self.ordem, 'material': self.material,
                       'texto_breve': self.texto_breve, 'quantidade': self.quantidade}]
         qtd_total = sum(int(i.get('quantidade') or 0) for i in itens) if itens else (self.quantidade or 0)
+        # peso e área totais = soma de (unitário do código SAP × quantidade do item)
+        peso_total = 0.0
+        area_total = 0.0
+        for it in itens:
+            a_unit, p_unit = _area_peso_do_codigo(it.get('material', ''))
+            q = int(it.get('quantidade') or 0)
+            area_total += a_unit * q
+            peso_total += p_unit * q
         pausas = _pausas_resumo(self.pausas_json)
         total_pausa_min = round(pausas['total_seg'] / 60, 1)
         return {
@@ -270,6 +371,7 @@ class Card(Base):
             'ordem': self.ordem, 'material': self.material,
             'texto_breve': self.texto_breve, 'quantidade': self.quantidade,
             'itens': itens, 'qtd_total': qtd_total, 'n_itens': len(itens),
+            'peso_total': round(peso_total, 2), 'area_total': round(area_total, 3),
             'observacao': self.observacao or '',
             'obs_banho': self.obs_banho or '',
             'operador_prep': self.operador_prep, 'operador_prep2': self.operador_prep2 or '',
@@ -327,6 +429,7 @@ def init_db():
     Base.metadata.create_all(engine)
     _migrar_colunas()
     carregar_lista_mestre()
+    carregar_area_peso()
     db = Session()
     try:
         if db.query(Usuario).count() == 0:
@@ -483,6 +586,7 @@ def admin_mestre():
     msg = None
     if request.method == 'POST' and request.form.get('acao') == 'recarregar':
         carregar_lista_mestre()
+        carregar_area_peso()
         st = _lista_status
         if st['carregada']:
             msg = f'Lista recarregada com sucesso: {st["total"]} ordens na memória.'
@@ -495,10 +599,14 @@ def admin_mestre():
 
     caminho = _achar_arquivo_mestre()
     arquivo_info = os.path.basename(caminho) if caminho else 'Nenhum arquivo encontrado'
+    ap = _areapeso_status
+    cap = _achar_arquivo_areapeso()
+    areapeso_info = os.path.basename(cap) if cap else 'Nenhum arquivo encontrado'
     return render_template('mestre.html', nome=session.get('nome'),
                            msg=msg, total_itens=st['total'],
                            amostra=amostra, status=st,
-                           arquivo_info=arquivo_info)
+                           arquivo_info=arquivo_info,
+                           areapeso_status=ap, areapeso_info=areapeso_info)
 
 
 @app.route('/api/admin/testar_op/<path:ordem>')
@@ -851,17 +959,28 @@ def _coletar_dados(de=None, ate=None):
         tp = [c.prep_minutos for c in cards if c.prep_minutos]
         tb = [c.banho_minutos for c in cards if c.banho_minutos]
         por_proc, por_dia = {}, {}
+        peso_por_dia, area_por_dia = {}, {}
+        peso_total_geral = 0.0
+        area_total_geral = 0.0
         for c in cards:
             p = c.processo or 'Sem processo'
             por_proc[p] = por_proc.get(p, 0) + 1
             dia = (c.banho_fim - timedelta(hours=3)).strftime('%d/%m')
             por_dia[dia] = por_dia.get(dia, 0) + 1
+            dd = c.to_dict()
+            peso_por_dia[dia] = round(peso_por_dia.get(dia, 0) + dd['peso_total'], 2)
+            area_por_dia[dia] = round(area_por_dia.get(dia, 0) + dd['area_total'], 3)
+            peso_total_geral += dd['peso_total']
+            area_total_geral += dd['area_total']
         return {
             'total': len(cards), 'normais': normais, 'retrabalhos': retrab,
             'em_andamento': len(ativos),
             'media_prep': round(sum(tp) / len(tp), 1) if tp else 0,
             'media_banho': round(sum(tb) / len(tb), 1) if tb else 0,
             'por_processo': por_proc, 'por_dia': por_dia,
+            'peso_por_dia': peso_por_dia, 'area_por_dia': area_por_dia,
+            'peso_total_geral': round(peso_total_geral, 1),
+            'area_total_geral': round(area_total_geral, 2),
             'ativos': [c.to_dict() for c in ativos],
             'registros': [c.to_dict() for c in sorted(cards, key=lambda x: x.id, reverse=True)[:200]],
         }
@@ -917,24 +1036,27 @@ def _gerar_excel(tipo):
         if tipo == 'prebanho':
             ws.title = 'Pre-Banho'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
+                       'Área total (m²)', 'Peso total (kg)',
                        'Processo', 'Tipo', 'Operador Prep', 'Nº oper.',
                        'Início', 'Fim', 'Tempo prep (min)', 'Tempo parada (min)',
                        'Pausas (por motivo)', 'Observação']
-            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 9, 19, 19, 13, 14, 30, 28]
+            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 18, 9, 19, 19, 13, 14, 30, 28]
 
         elif tipo == 'banho':
             ws.title = 'Banho'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
+                       'Área total (m²)', 'Peso total (kg)',
                        'Processo', 'Tipo',
                        'Operador Banho Início', 'Operador Banho Fim',
                        'Início Banho - Data', 'Início Banho - Hora',
                        'Final Banho - Data', 'Final Banho - Hora',
                        'Tempo banho (min)', 'Observação banho']
-            larg = [6, 7, 14, 14, 30, 7, 22, 12, 20, 20, 16, 14, 16, 14, 14, 28]
+            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 20, 20, 16, 14, 16, 14, 14, 28]
 
         else:  # geral
             ws.title = 'Geral'
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
+                       'Área total (m²)', 'Peso total (kg)',
                        'Processo', 'Tipo',
                        'Operador Prep', 'Nº oper.',
                        'Início Prep', 'Fim Prep', 'Tempo prep (min)', 'Tempo parada (min)',
@@ -943,7 +1065,7 @@ def _gerar_excel(tipo):
                        'Final Banho - Data', 'Final Banho - Hora',
                        'Tempo banho (min)', 'Total prep+banho (min)',
                        'Observação Prep', 'Observação Banho']
-            larg = [6, 7, 14, 14, 30, 7, 22, 12, 18, 9, 19, 19, 13, 14, 20, 20, 16, 14, 16, 14, 14, 16, 28, 28]
+            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 18, 9, 19, 19, 13, 14, 20, 20, 16, 14, 16, 14, 14, 16, 28, 28]
 
         _estilo_cabecalho(ws, headers)
 
@@ -954,10 +1076,16 @@ def _gerar_excel(tipo):
             total_prep_banho = round((dd['prep_minutos'] or 0) + (dd['banho_minutos'] or 0), 1)
 
             for it in itens:
+                # peso/área da linha = unitário do código × quantidade do item
+                a_unit, p_unit = _area_peso_do_codigo(it.get('material', ''))
+                q_it = int(it.get('quantidade') or 0)
+                area_it = round(a_unit * q_it, 3)
+                peso_it = round(p_unit * q_it, 2)
                 if tipo == 'prebanho':
                     ws.append([
                         dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
-                        it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
+                        it['texto_breve'], it['quantidade'], area_it, peso_it,
+                        dd['processo'], dd['tipo'],
                         dd['operador_prep'], dd['n_operadores'],
                         dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
                         dd['total_pausa_min'],
@@ -966,7 +1094,8 @@ def _gerar_excel(tipo):
                 elif tipo == 'banho':
                     ws.append([
                         dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
-                        it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
+                        it['texto_breve'], it['quantidade'], area_it, peso_it,
+                        dd['processo'], dd['tipo'],
                         dd['operador_banho_inicio'], dd['operador_banho_fim'],
                         dd['banho_inicio_data'], dd['banho_inicio_hora'],
                         dd['banho_fim_data'], dd['banho_fim_hora'],
@@ -975,7 +1104,8 @@ def _gerar_excel(tipo):
                 else:  # geral
                     ws.append([
                         dd['id'], dd['numero_cesto'], it['ordem'], it['material'],
-                        it['texto_breve'], it['quantidade'], dd['processo'], dd['tipo'],
+                        it['texto_breve'], it['quantidade'], area_it, peso_it,
+                        dd['processo'], dd['tipo'],
                         dd['operador_prep'], dd['n_operadores'],
                         dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
                         dd['total_pausa_min'],

@@ -1,6 +1,6 @@
 // Lógica compartilhada do dashboard admin e do painel público.
 // Define window.DASH_ENDPOINT antes de carregar este arquivo.
-let chartTipo, chartProc, chartDia;
+let chartTipo, chartProc, chartDia, chartPeso, chartArea;
 const ESTADOS={
   PREPARANDO:{t:'Preparando',c:'#F59E0B',i:'hourglass-split'},
   PREENCHER:{t:'Preencher',c:'#64748b',i:'pencil-square'},
@@ -22,6 +22,8 @@ async function atualizar(){
   set('kTotal',d.total); set('kAnd',d.em_andamento);
   set('kNormais',d.normais); set('kRetrab',d.retrabalhos);
   set('kPrep',d.media_prep); set('kBanho',d.media_banho);
+  set('kPeso',d.peso_total_geral!==undefined?d.peso_total_geral:0);
+  set('kArea',d.area_total_geral!==undefined?d.area_total_geral:0);
   renderAtivos(d.ativos);
   renderCharts(d);
   if(document.getElementById('tbody')) renderTabela(d.registros);
@@ -59,6 +61,20 @@ function renderCharts(d){
     chartTipo.data.datasets[0].data=[d.normais,d.retrabalhos];chartTipo.update();
     chartProc.data.labels=labels;chartProc.data.datasets[0].data=data;chartProc.update();
     if(chartDia){chartDia.data.labels=diaL;chartDia.data.datasets[0].data=diaD;chartDia.update();}
+  }
+  // gráficos de peso e área por dia (linha)
+  const pesoL=Object.keys(d.peso_por_dia||{}), pesoD=Object.values(d.peso_por_dia||{});
+  const areaL=Object.keys(d.area_por_dia||{}), areaD=Object.values(d.area_por_dia||{});
+  if(!chartPeso && document.getElementById('chartPeso')){
+    chartPeso=new Chart(document.getElementById('chartPeso'),{type:'line',
+      data:{labels:pesoL,datasets:[{label:'kg',data:pesoD,borderColor:'#0EA5A0',backgroundColor:'rgba(14,165,160,.15)',fill:true,tension:.3,borderWidth:3,pointRadius:4,pointBackgroundColor:'#0EA5A0'}]},
+      options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    chartArea=new Chart(document.getElementById('chartArea'),{type:'line',
+      data:{labels:areaL,datasets:[{label:'m²',data:areaD,borderColor:'#0F766E',backgroundColor:'rgba(15,118,110,.15)',fill:true,tension:.3,borderWidth:3,pointRadius:4,pointBackgroundColor:'#0F766E'}]},
+      options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  }else if(chartPeso){
+    chartPeso.data.labels=pesoL;chartPeso.data.datasets[0].data=pesoD;chartPeso.update();
+    chartArea.data.labels=areaL;chartArea.data.datasets[0].data=areaD;chartArea.update();
   }
 }
 
