@@ -2,12 +2,18 @@
 {% block title %}Banho — Controle Produtividade{% endblock %}
 {% block content %}
 
-<div class="banho-cols">
-  <div>
+<div class="layout-sel">
+  <button class="layout-btn active" id="lbAmbos" onclick="setLayout('ambos')"><i class="bi bi-layout-split"></i>Em banho e fila</button>
+  <button class="layout-btn" id="lbBanho" onclick="setLayout('banho')"><i class="bi bi-droplet-fill"></i>Só em banho</button>
+  <button class="layout-btn" id="lbFila" onclick="setLayout('fila')"><i class="bi bi-list-ol"></i>Só fila de espera</button>
+</div>
+
+<div class="banho-cols" id="banhoCols">
+  <div id="colBanho">
     <div class="section-title" style="margin-bottom:14px;"><i class="bi bi-droplet-fill"></i>Em banho agora</div>
     <div id="emBanho" class="flow-list"><div class="muted small">Carregando…</div></div>
   </div>
-  <div>
+  <div id="colFila">
     <div class="section-title" style="margin-bottom:14px;"><i class="bi bi-list-ol"></i>Fila de espera</div>
     <div id="fila" class="flow-list"><div class="muted small">Carregando…</div></div>
   </div>
@@ -58,6 +64,18 @@
 {% block extra_js %}
 <script>
 let ultimaFila=[];
+let layoutBanho='ambos';
+function setLayout(modo){
+  layoutBanho=modo;
+  document.getElementById('lbAmbos').classList.toggle('active',modo==='ambos');
+  document.getElementById('lbBanho').classList.toggle('active',modo==='banho');
+  document.getElementById('lbFila').classList.toggle('active',modo==='fila');
+  const cb=document.getElementById('colBanho'), cf=document.getElementById('colFila'), cols=document.getElementById('banhoCols');
+  cb.style.display = (modo==='fila')?'none':'';
+  cf.style.display = (modo==='banho')?'none':'';
+  // quando só uma coluna, ocupa a largura toda
+  cols.style.gridTemplateColumns = (modo==='ambos')?'':'1fr';
+}
 let idParaIniciar=null;
 let cestoParaIniciar='';
 

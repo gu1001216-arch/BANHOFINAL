@@ -364,6 +364,10 @@ class Card(Base):
             peso_total += p_unit * q
         pausas = _pausas_resumo(self.pausas_json)
         total_pausa_min = round(pausas['total_seg'] / 60, 1)
+        # tempo de espera = início do banho − fim da preparação (parado na fila)
+        espera_min = 0.0
+        if self.banho_inicio and self.prep_fim:
+            espera_min = round(max(0, (self.banho_inicio - self.prep_fim).total_seconds()) / 60, 1)
         return {
             'id': self.id, 'estado': self.estado,
             'numero_cesto': self.numero_cesto,
@@ -380,8 +384,11 @@ class Card(Base):
             'operador_banho_inicio': self.operador_banho_inicio or self.operador_banho or '',
             'operador_banho_fim': self.operador_banho_fim or '',
             'prep_inicio': fmt(self.prep_inicio), 'prep_fim': fmt(self.prep_fim),
+            'prep_inicio_data': fmt_data(self.prep_inicio), 'prep_inicio_hora': fmt_hora(self.prep_inicio),
+            'prep_fim_data': fmt_data(self.prep_fim), 'prep_fim_hora': fmt_hora(self.prep_fim),
             'prep_minutos': round(self.prep_minutos or 0, 1),
             'total_pausa_min': total_pausa_min,
+            'espera_min': espera_min,
             'banho_inicio': fmt(self.banho_inicio), 'banho_fim': fmt(self.banho_fim),
             'banho_inicio_data': fmt_data(self.banho_inicio),
             'banho_inicio_hora': fmt_hora(self.banho_inicio),
@@ -956,12 +963,22 @@ def _coletar_dados(de=None, ate=None):
         ativos = db.query(Card).filter(Card.estado.in_(ESTADOS_ATIVOS)).order_by(Card.id.desc()).all()
         normais = sum(1 for c in cards if c.tipo == 'Normal')
         retrab = sum(1 for c in cards if c.tipo == 'Retrabalho')
+        # banho normal/retrabalho = TODOS (em andamento + concluídos) daquele tipo
+        todos_para_tipo = list(cards) + list(ativos)
+        banho_normal = sum(1 for c in todos_para_tipo if c.tipo == 'Normal')
+        banho_retrab = sum(1 for c in todos_para_tipo if c.tipo == 'Retrabalho')
         tp = [c.prep_minutos for c in cards if c.prep_minutos]
         tb = [c.banho_minutos for c in cards if c.banho_minutos]
+        # tempo de espera (fila) = início banho − fim preparação
+        esperas = []
+        for c in cards:
+            if c.banho_inicio and c.prep_fim:
+                esperas.append(max(0, (c.banho_inicio - c.prep_fim).total_seconds()) / 60)
         por_proc, por_dia = {}, {}
         peso_por_dia, area_por_dia = {}, {}
         peso_total_geral = 0.0
         area_total_geral = 0.0
+        pecas_total_geral = 0
         for c in cards:
             p = c.processo or 'Sem processo'
             por_proc[p] = por_proc.get(p, 0) + 1
@@ -972,15 +989,19 @@ def _coletar_dados(de=None, ate=None):
             area_por_dia[dia] = round(area_por_dia.get(dia, 0) + dd['area_total'], 3)
             peso_total_geral += dd['peso_total']
             area_total_geral += dd['area_total']
+            pecas_total_geral += dd['qtd_total']
         return {
             'total': len(cards), 'normais': normais, 'retrabalhos': retrab,
             'em_andamento': len(ativos),
+            'banho_normal': banho_normal, 'banho_retrabalho': banho_retrab,
             'media_prep': round(sum(tp) / len(tp), 1) if tp else 0,
             'media_banho': round(sum(tb) / len(tb), 1) if tb else 0,
+            'media_espera': round(sum(esperas) / len(esperas), 1) if esperas else 0,
             'por_processo': por_proc, 'por_dia': por_dia,
             'peso_por_dia': peso_por_dia, 'area_por_dia': area_por_dia,
             'peso_total_geral': round(peso_total_geral, 1),
             'area_total_geral': round(area_total_geral, 2),
+            'pecas_total_geral': pecas_total_geral,
             'ativos': [c.to_dict() for c in ativos],
             'registros': [c.to_dict() for c in sorted(cards, key=lambda x: x.id, reverse=True)[:200]],
         }
@@ -1038,9 +1059,11 @@ def _gerar_excel(tipo):
             headers = ['ID', 'Cesto', 'OP (Ordem)', 'Código', 'Texto breve', 'Qtd',
                        'Área total (m²)', 'Peso total (kg)',
                        'Processo', 'Tipo', 'Operador Prep', 'Nº oper.',
-                       'Início', 'Fim', 'Tempo prep (min)', 'Tempo parada (min)',
+                       'Início Prep - Data', 'Início Prep - Hora',
+                       'Fim Prep - Data', 'Fim Prep - Hora',
+                       'Tempo prep (min)', 'Tempo parada (min)',
                        'Pausas (por motivo)', 'Observação']
-            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 18, 9, 19, 19, 13, 14, 30, 28]
+            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 18, 9, 16, 14, 16, 14, 13, 14, 30, 28]
 
         elif tipo == 'banho':
             ws.title = 'Banho'
@@ -1048,10 +1071,11 @@ def _gerar_excel(tipo):
                        'Área total (m²)', 'Peso total (kg)',
                        'Processo', 'Tipo',
                        'Operador Banho Início', 'Operador Banho Fim',
+                       'Fim Prep - Data', 'Fim Prep - Hora',
                        'Início Banho - Data', 'Início Banho - Hora',
                        'Final Banho - Data', 'Final Banho - Hora',
-                       'Tempo banho (min)', 'Observação banho']
-            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 20, 20, 16, 14, 16, 14, 14, 28]
+                       'Tempo espera (min)', 'Tempo banho (min)', 'Observação banho']
+            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 20, 20, 16, 14, 16, 14, 16, 14, 14, 14, 28]
 
         else:  # geral
             ws.title = 'Geral'
@@ -1059,13 +1083,16 @@ def _gerar_excel(tipo):
                        'Área total (m²)', 'Peso total (kg)',
                        'Processo', 'Tipo',
                        'Operador Prep', 'Nº oper.',
-                       'Início Prep', 'Fim Prep', 'Tempo prep (min)', 'Tempo parada (min)',
+                       'Início Prep - Data', 'Início Prep - Hora',
+                       'Fim Prep - Data', 'Fim Prep - Hora',
+                       'Tempo prep (min)', 'Tempo parada (min)',
                        'Operador Banho Início', 'Operador Banho Fim',
                        'Início Banho - Data', 'Início Banho - Hora',
                        'Final Banho - Data', 'Final Banho - Hora',
-                       'Tempo banho (min)', 'Total prep+banho (min)',
+                       'Tempo espera (min)', 'Tempo banho (min)', 'Total prep+banho (min)',
                        'Observação Prep', 'Observação Banho']
-            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 18, 9, 19, 19, 13, 14, 20, 20, 16, 14, 16, 14, 14, 16, 28, 28]
+            larg = [6, 7, 14, 14, 30, 7, 14, 14, 22, 12, 18, 9, 16, 14, 16, 14, 13, 14,
+                    20, 20, 16, 14, 16, 14, 14, 14, 16, 28, 28]
 
         _estilo_cabecalho(ws, headers)
 
@@ -1076,7 +1103,6 @@ def _gerar_excel(tipo):
             total_prep_banho = round((dd['prep_minutos'] or 0) + (dd['banho_minutos'] or 0), 1)
 
             for it in itens:
-                # peso/área da linha = unitário do código × quantidade do item
                 a_unit, p_unit = _area_peso_do_codigo(it.get('material', ''))
                 q_it = int(it.get('quantidade') or 0)
                 area_it = round(a_unit * q_it, 3)
@@ -1087,8 +1113,9 @@ def _gerar_excel(tipo):
                         it['texto_breve'], it['quantidade'], area_it, peso_it,
                         dd['processo'], dd['tipo'],
                         dd['operador_prep'], dd['n_operadores'],
-                        dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
-                        dd['total_pausa_min'],
+                        dd['prep_inicio_data'], dd['prep_inicio_hora'],
+                        dd['prep_fim_data'], dd['prep_fim_hora'],
+                        dd['prep_minutos'], dd['total_pausa_min'],
                         dd['pausas']['texto'], dd['observacao']
                     ])
                 elif tipo == 'banho':
@@ -1097,9 +1124,10 @@ def _gerar_excel(tipo):
                         it['texto_breve'], it['quantidade'], area_it, peso_it,
                         dd['processo'], dd['tipo'],
                         dd['operador_banho_inicio'], dd['operador_banho_fim'],
+                        dd['prep_fim_data'], dd['prep_fim_hora'],
                         dd['banho_inicio_data'], dd['banho_inicio_hora'],
                         dd['banho_fim_data'], dd['banho_fim_hora'],
-                        dd['banho_minutos'], dd['obs_banho']
+                        dd['espera_min'], dd['banho_minutos'], dd['obs_banho']
                     ])
                 else:  # geral
                     ws.append([
@@ -1107,12 +1135,13 @@ def _gerar_excel(tipo):
                         it['texto_breve'], it['quantidade'], area_it, peso_it,
                         dd['processo'], dd['tipo'],
                         dd['operador_prep'], dd['n_operadores'],
-                        dd['prep_inicio'], dd['prep_fim'], dd['prep_minutos'],
-                        dd['total_pausa_min'],
+                        dd['prep_inicio_data'], dd['prep_inicio_hora'],
+                        dd['prep_fim_data'], dd['prep_fim_hora'],
+                        dd['prep_minutos'], dd['total_pausa_min'],
                         dd['operador_banho_inicio'], dd['operador_banho_fim'],
                         dd['banho_inicio_data'], dd['banho_inicio_hora'],
                         dd['banho_fim_data'], dd['banho_fim_hora'],
-                        dd['banho_minutos'], total_prep_banho,
+                        dd['espera_min'], dd['banho_minutos'], total_prep_banho,
                         dd['observacao'], dd['obs_banho']
                     ])
 

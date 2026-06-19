@@ -20,8 +20,12 @@ async function atualizar(){
   const r=await fetch(window.DASH_ENDPOINT+getRange());
   const d=await r.json();
   set('kTotal',d.total); set('kAnd',d.em_andamento);
+  set('kBanhoNormal',d.banho_normal!==undefined?d.banho_normal:d.normais);
+  set('kBanhoRetrab',d.banho_retrabalho!==undefined?d.banho_retrabalho:d.retrabalhos);
   set('kNormais',d.normais); set('kRetrab',d.retrabalhos);
   set('kPrep',d.media_prep); set('kBanho',d.media_banho);
+  set('kEspera',d.media_espera!==undefined?d.media_espera:0);
+  set('kPecas',d.pecas_total_geral!==undefined?d.pecas_total_geral:0);
   set('kPeso',d.peso_total_geral!==undefined?d.peso_total_geral:0);
   set('kArea',d.area_total_geral!==undefined?d.area_total_geral:0);
   renderAtivos(d.ativos);

@@ -232,11 +232,9 @@ textarea.input{min-height:auto;resize:vertical;}
 .filter-bar{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:16px;}
 
 /* ── Modal ───────────────────────────────────────────────────── */
-.modal-overlay{position:fixed;inset:0;background:rgba(13,27,38,.55);backdrop-filter:blur(3px);z-index:100;display:none;align-items:flex-end;justify-content:center;padding:0;}
+.modal-overlay{position:fixed;inset:0;background:rgba(13,27,38,.55);backdrop-filter:blur(3px);z-index:100;display:none;align-items:center;justify-content:center;padding:16px;}
 .modal-overlay.open{display:flex;}
-@media(min-width:640px){.modal-overlay{align-items:center;padding:20px;}}
-.modal{background:#fff;width:100%;max-width:560px;border-radius:var(--r-lg) var(--r-lg) 0 0;max-height:94vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:slideUp .22s ease;}
-@media(min-width:640px){.modal{border-radius:var(--r-lg);}}
+.modal{background:#fff;width:100%;max-width:560px;border-radius:var(--r-lg);max-height:90vh;overflow-y:auto;box-shadow:var(--shadow-lg);animation:slideUp .22s ease;}
 @keyframes slideUp{from{transform:translateY(40px);opacity:.6;}to{transform:translateY(0);opacity:1;}}
 .modal-head{position:sticky;top:0;background:linear-gradient(105deg,var(--aco-900),var(--aco-700));color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;}
 .modal-head h5{font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:9px;}
@@ -373,3 +371,13 @@ textarea.input{min-height:auto;resize:vertical;}
 /* evita que qualquer container estoure a largura da tela */
 .page,.panel,.flow-card,.kpi,.chart-box{max-width:100%;}
 img,canvas{max-width:100%;}
+
+/* ── Títulos de área no dashboard ───────────────────────────── */
+.area-titulo{font-size:.82rem;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--aco-700);margin:6px 0 12px;display:flex;align-items:center;gap:8px;}
+.area-titulo i{color:var(--aqua);font-size:1rem;}
+.area-titulo:not(:first-child){margin-top:8px;}
+
+/* ── Seletor de layout (tela do banho) ──────────────────────── */
+.layout-sel{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;}
+.layout-btn{padding:9px 16px;border:2px solid var(--line);border-radius:10px;background:#fff;font-family:inherit;font-weight:700;font-size:.85rem;color:var(--slate);cursor:pointer;transition:.15s;display:flex;align-items:center;gap:6px;}
+.layout-btn.active{border-color:var(--sky);background:var(--sky-soft);color:#1d4ed8;}
