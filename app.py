@@ -668,6 +668,12 @@ def api_cestos():
         db.close()
 
 
+@app.route('/api/agora')
+def api_agora():
+    """Hora atual do servidor (UTC ISO) — p/ sincronizar cronômetros e começar do 0:00."""
+    return jsonify({'agora_iso': datetime.utcnow().isoformat() + 'Z'})
+
+
 @app.route('/api/admin/lista_status')
 @login_required('admin')
 def api_lista_status():
@@ -850,6 +856,8 @@ def api_prep_finalizar():
             card.prep_fim = agora
             bruto = (card.prep_fim - card.prep_inicio).total_seconds()
             card.prep_minutos = round(max(0, bruto - (card.pausa_acumulada_seg or 0)) / 60, 1)
+        # registra quem FINALIZOU a preparação deste cesto
+        card.operador_prep = session.get('nome', '') or card.operador_prep
         _aplicar_meta(card, d)
         _salvar_itens(card, d)
         card.estado = ST_FILA_BANHO
@@ -963,10 +971,9 @@ def _coletar_dados(de=None, ate=None):
         ativos = db.query(Card).filter(Card.estado.in_(ESTADOS_ATIVOS)).order_by(Card.id.desc()).all()
         normais = sum(1 for c in cards if c.tipo == 'Normal')
         retrab = sum(1 for c in cards if c.tipo == 'Retrabalho')
-        # banho normal/retrabalho = TODOS (em andamento + concluídos) daquele tipo
-        todos_para_tipo = list(cards) + list(ativos)
-        banho_normal = sum(1 for c in todos_para_tipo if c.tipo == 'Normal')
-        banho_retrab = sum(1 for c in todos_para_tipo if c.tipo == 'Retrabalho')
+        # banho normal/retrabalho = só cestos com banho FINALIZADO (concluídos)
+        banho_normal = normais
+        banho_retrab = retrab
         tp = [c.prep_minutos for c in cards if c.prep_minutos]
         tb = [c.banho_minutos for c in cards if c.banho_minutos]
         # tempo de espera (fila) = início banho − fim preparação

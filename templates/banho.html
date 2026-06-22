@@ -81,10 +81,24 @@ let cestoParaIniciar='';
 
 function fmtTempo(s){const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),x=s%60;const mm=String(m).padStart(2,'0'),xx=String(x).padStart(2,'0');return h>0?`${h}:${mm}:${xx}`:`${mm}:${xx}`;}
 
+// offset entre o relógio do servidor e o do tablet (p/ cronômetro começar do 0:00)
+let servidorOffset=0;
+async function sincronizarRelogio(){
+  try{
+    const t0=Date.now();
+    const j=await (await fetch('/api/agora')).json();
+    const t1=Date.now();
+    const servidorMs=new Date(j.agora_iso).getTime();
+    // compensa a latência (metade do tempo de ida e volta)
+    servidorOffset=servidorMs+(t1-t0)/2-t1;
+  }catch(_){servidorOffset=0;}
+}
+function agoraServidor(){return Date.now()+servidorOffset;}
+
 async function carregar(){
   const r=await fetch('/api/banho/fila'); const j=await r.json();
-  /* Guarda o timestamp exato em que recebemos a resposta do servidor */
-  const agora=Date.now();
+  /* usa a hora do servidor (sincronizada) p/ o cronômetro bater certo */
+  const agora=agoraServidor();
   ultimaFila=j.em_banho||[];
   const eb=document.getElementById('emBanho');
   eb.innerHTML=j.em_banho.length?j.em_banho.map(c=>{
@@ -122,7 +136,7 @@ async function carregar(){
 }
 
 function tick(){
-  const a=Date.now();
+  const a=agoraServidor();
   document.querySelectorAll('.cron-el[data-ini]').forEach(e=>{
     if(!e.dataset.ini) return;
     const seg=Math.max(0,Math.floor((a-new Date(e.dataset.ini).getTime())/1000));
@@ -162,6 +176,7 @@ async function confirmarSaida(){
 }
 document.getElementById('modalSaida').addEventListener('click',e=>{if(e.target.id==='modalSaida')fecharSaida();});
 
-carregar();setInterval(carregar,4000);setInterval(tick,1000);
+sincronizarRelogio().then(()=>{carregar();setInterval(carregar,4000);setInterval(tick,1000);});
+setInterval(sincronizarRelogio,60000);
 </script>
 {% endblock %}

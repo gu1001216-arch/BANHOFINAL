@@ -40,7 +40,6 @@
   <div class="area-titulo"><i class="bi bi-bar-chart-line"></i>Totais processados</div>
   <div class="kpi-row">
     <div class="kpi k-teal"><div class="kpi-val" id="kPecas">0</div><div class="kpi-lbl"><i class="bi bi-stack"></i>Peças totais</div></div>
-    <div class="kpi k-teal"><div class="kpi-val" id="kPeso">0</div><div class="kpi-lbl"><i class="bi bi-box-seam"></i>Peso total (kg)</div></div>
     <div class="kpi k-teal"><div class="kpi-val" id="kArea">0</div><div class="kpi-lbl"><i class="bi bi-rulers"></i>Área total (m²)</div></div>
   </div>
 
@@ -50,14 +49,26 @@
   </div>
 
   <div class="chart-grid-3">
-    <div class="chart-box"><h6><i class="bi bi-pie-chart-fill"></i>Normal × Retrabalho</h6><canvas id="chartTipo" height="200"></canvas></div>
-    <div class="chart-box"><h6><i class="bi bi-bar-chart-fill"></i>Por processo</h6><canvas id="chartProc" height="200"></canvas></div>
-    <div class="chart-box"><h6><i class="bi bi-graph-up"></i>Concluídos por dia</h6><canvas id="chartDia" height="200"></canvas></div>
+    <div class="chart-box"><h6><i class="bi bi-pie-chart-fill"></i>Cestos processados: Normal × Retrabalho</h6><canvas id="chartTipo" height="200"></canvas></div>
+    <div class="chart-box"><h6><i class="bi bi-bar-chart-fill"></i>Cestos por tipo de processo</h6><canvas id="chartProc" height="200"></canvas></div>
+    <div class="chart-box"><h6><i class="bi bi-graph-up"></i>Cestos processados por dia</h6><canvas id="chartDia" height="200"></canvas></div>
   </div>
 
-  <div class="chart-grid">
-    <div class="chart-box"><h6><i class="bi bi-box-seam"></i>Peso processado por dia (kg)</h6><canvas id="chartPeso" height="180"></canvas></div>
+  <div class="chart-grid" style="grid-template-columns:1fr;">
     <div class="chart-box"><h6><i class="bi bi-rulers"></i>Área processada por dia (m²)</h6><canvas id="chartArea" height="180"></canvas></div>
+  </div>
+
+  <div class="panel panel-pad" style="margin-top:18px;">
+    <div class="section-title" style="font-size:1rem;margin-bottom:14px;"><i class="bi bi-clock-history"></i>Histórico dos cestos concluídos</div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>#</th><th>Cesto</th><th>OP</th><th>Código</th><th>Texto breve</th><th>Qtd</th>
+          <th>Processo</th><th>Tipo</th><th>Prep</th><th>Banho</th><th>Fim</th>
+        </tr></thead>
+        <tbody id="histBody"><tr><td colspan="11" class="muted small">Carregando…</td></tr></tbody>
+      </table>
+    </div>
   </div>
 </main>
 

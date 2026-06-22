@@ -132,12 +132,22 @@ const ROTULO={PREPARANDO:'Preparando',PREENCHER:'Preencher',FILA_BANHO:'Na fila'
 let modalEstado='', cestoSel=0, cardAtual=null, nOper=1, itens=[];
 
 function fmtTempo(s){const m=Math.floor(s/60),x=s%60;return `${String(m).padStart(2,'0')}:${String(x).padStart(2,'0')}`;}
+let servidorOffset=0;
+async function sincronizarRelogio(){
+  try{
+    const t0=Date.now();
+    const j=await (await fetch('/api/agora')).json();
+    const t1=Date.now();
+    servidorOffset=new Date(j.agora_iso).getTime()+(t1-t0)/2-t1;
+  }catch(_){servidorOffset=0;}
+}
+function agoraServidor(){return Date.now()+servidorOffset;}
 function segPrep(cd){
   if(!cd.prep_inicio_iso)return 0;
   const ini=new Date(cd.prep_inicio_iso).getTime();
   let p=cd.pausa_acumulada_seg||0;
-  if(cd.pausado&&cd.pausa_inicio_iso)p+=Math.floor((Date.now()-new Date(cd.pausa_inicio_iso).getTime())/1000);
-  return Math.max(0,Math.floor((Date.now()-ini)/1000)-p);
+  if(cd.pausado&&cd.pausa_inicio_iso)p+=Math.floor((agoraServidor()-new Date(cd.pausa_inicio_iso).getTime())/1000);
+  return Math.max(0,Math.floor((agoraServidor()-ini)/1000)-p);
 }
 
 async function carregar(){
@@ -149,7 +159,7 @@ async function carregar(){
       cron=`<span class="cesto-mini-cron prep-cron" data-card='${JSON.stringify(cd).replace(/'/g,"&#39;")}'>${fmtTempo(segPrep(cd))}</span>`;
       if(cd.pausado){cls+=' is-paused';rot='Pausado';}
     }else if(cd.estado==='EM_BANHO'&&cd.banho_inicio_iso){
-      cron=`<span class="cesto-mini-cron cron-el" data-ini="${cd.banho_inicio_iso}">${fmtTempo(Math.max(0,Math.floor((Date.now()-new Date(cd.banho_inicio_iso).getTime())/1000)))}</span>`;
+      cron=`<span class="cesto-mini-cron cron-el" data-ini="${cd.banho_inicio_iso}">${fmtTempo(Math.max(0,Math.floor((agoraServidor()-new Date(cd.banho_inicio_iso).getTime())/1000)))}</span>`;
     }
     const badge=cd.n_itens>1?`<span class="multi-badge">${cd.n_itens} OPs</span>`:'';
     const op2=cd.n_operadores>1?`<span class="cesto-nop" title="${cd.n_operadores} operadores"><i class="bi bi-people-fill"></i>${cd.n_operadores}</span>`:'';
@@ -159,7 +169,7 @@ async function carregar(){
   }).join('');
 }
 function tick(){
-  document.querySelectorAll('.cron-el[data-ini]').forEach(e=>{e.textContent=fmtTempo(Math.max(0,Math.floor((Date.now()-new Date(e.dataset.ini).getTime())/1000)));});
+  document.querySelectorAll('.cron-el[data-ini]').forEach(e=>{e.textContent=fmtTempo(Math.max(0,Math.floor((agoraServidor()-new Date(e.dataset.ini).getTime())/1000)));});
   document.querySelectorAll('.prep-cron[data-card]').forEach(e=>{try{e.textContent=fmtTempo(segPrep(JSON.parse(e.dataset.card)));}catch(_){}});
   if(modalEstado==='cron'&&cardAtual&&!cardAtual.pausado)document.getElementById('cronBig').textContent=fmtTempo(segPrep(cardAtual));
 }
@@ -358,6 +368,7 @@ async function salvar(){
 document.getElementById('btnSalvar').addEventListener('click',salvar);
 document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')fecharModal();});
 
-carregar();setInterval(carregar,5000);setInterval(tick,1000);
+sincronizarRelogio().then(()=>{carregar();setInterval(carregar,5000);setInterval(tick,1000);});
+setInterval(sincronizarRelogio,60000);
 </script>
 {% endblock %}

@@ -31,6 +31,31 @@ async function atualizar(){
   renderAtivos(d.ativos);
   renderCharts(d);
   if(document.getElementById('tbody')) renderTabela(d.registros);
+  if(document.getElementById('histBody')) renderHistorico(d.registros);
+}
+function renderHistorico(regs){
+  const tb=document.getElementById('histBody');
+  if(!regs||!regs.length){tb.innerHTML='<tr><td colspan="11" class="muted small">Nenhum cesto concluído ainda.</td></tr>';return;}
+  let linhas='';
+  regs.forEach(r=>{
+    const itens=(r.itens&&r.itens.length)?r.itens:[{ordem:r.ordem,material:r.material,texto_breve:r.texto_breve,quantidade:r.quantidade}];
+    itens.forEach((it,idx)=>{
+      linhas+=`<tr>
+        <td>${idx===0?r.id:''}</td>
+        <td>${idx===0?('<strong>'+r.numero_cesto+'</strong>'):''}</td>
+        <td>${it.ordem||'—'}</td>
+        <td>${it.material||'—'}</td>
+        <td><span class="small">${it.texto_breve||'—'}</span></td>
+        <td>${it.quantidade||0}</td>
+        <td>${idx===0?(r.processo||'—'):''}</td>
+        <td>${idx===0?(r.tipo||'—'):''}</td>
+        <td>${idx===0?(r.prep_minutos+' min'):''}</td>
+        <td>${idx===0?(r.banho_minutos+' min'):''}</td>
+        <td>${idx===0?(r.banho_fim_data+' '+r.banho_fim_hora):''}</td>
+      </tr>`;
+    });
+  });
+  tb.innerHTML=linhas;
 }
 function set(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 
@@ -66,19 +91,22 @@ function renderCharts(d){
     chartProc.data.labels=labels;chartProc.data.datasets[0].data=data;chartProc.update();
     if(chartDia){chartDia.data.labels=diaL;chartDia.data.datasets[0].data=diaD;chartDia.update();}
   }
-  // gráficos de peso e área por dia (linha)
+  // gráficos de peso e área por dia (linha) — cada um só se o canvas existir
   const pesoL=Object.keys(d.peso_por_dia||{}), pesoD=Object.values(d.peso_por_dia||{});
   const areaL=Object.keys(d.area_por_dia||{}), areaD=Object.values(d.area_por_dia||{});
-  if(!chartPeso && document.getElementById('chartPeso')){
-    chartPeso=new Chart(document.getElementById('chartPeso'),{type:'line',
-      data:{labels:pesoL,datasets:[{label:'kg',data:pesoD,borderColor:'#0EA5A0',backgroundColor:'rgba(14,165,160,.15)',fill:true,tension:.3,borderWidth:3,pointRadius:4,pointBackgroundColor:'#0EA5A0'}]},
-      options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-    chartArea=new Chart(document.getElementById('chartArea'),{type:'line',
-      data:{labels:areaL,datasets:[{label:'m²',data:areaD,borderColor:'#0F766E',backgroundColor:'rgba(15,118,110,.15)',fill:true,tension:.3,borderWidth:3,pointRadius:4,pointBackgroundColor:'#0F766E'}]},
-      options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-  }else if(chartPeso){
-    chartPeso.data.labels=pesoL;chartPeso.data.datasets[0].data=pesoD;chartPeso.update();
-    chartArea.data.labels=areaL;chartArea.data.datasets[0].data=areaD;chartArea.update();
+  if(document.getElementById('chartPeso')){
+    if(!chartPeso){
+      chartPeso=new Chart(document.getElementById('chartPeso'),{type:'line',
+        data:{labels:pesoL,datasets:[{label:'kg',data:pesoD,borderColor:'#0EA5A0',backgroundColor:'rgba(14,165,160,.15)',fill:true,tension:.3,borderWidth:3,pointRadius:4,pointBackgroundColor:'#0EA5A0'}]},
+        options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    }else{chartPeso.data.labels=pesoL;chartPeso.data.datasets[0].data=pesoD;chartPeso.update();}
+  }
+  if(document.getElementById('chartArea')){
+    if(!chartArea){
+      chartArea=new Chart(document.getElementById('chartArea'),{type:'line',
+        data:{labels:areaL,datasets:[{label:'m²',data:areaD,borderColor:'#0F766E',backgroundColor:'rgba(15,118,110,.15)',fill:true,tension:.3,borderWidth:3,pointRadius:4,pointBackgroundColor:'#0F766E'}]},
+        options:{plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    }else{chartArea.data.labels=areaL;chartArea.data.datasets[0].data=areaD;chartArea.update();}
   }
 }
 
