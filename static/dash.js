@@ -35,27 +35,14 @@ async function atualizar(){
 }
 function renderHistorico(regs){
   const tb=document.getElementById('histBody');
-  if(!regs||!regs.length){tb.innerHTML='<tr><td colspan="11" class="muted small">Nenhum cesto concluído ainda.</td></tr>';return;}
-  let linhas='';
-  regs.forEach(r=>{
-    const itens=(r.itens&&r.itens.length)?r.itens:[{ordem:r.ordem,material:r.material,texto_breve:r.texto_breve,quantidade:r.quantidade}];
-    itens.forEach((it,idx)=>{
-      linhas+=`<tr>
-        <td>${idx===0?r.id:''}</td>
-        <td>${idx===0?('<strong>'+r.numero_cesto+'</strong>'):''}</td>
-        <td>${it.ordem||'—'}</td>
-        <td>${it.material||'—'}</td>
-        <td><span class="small">${it.texto_breve||'—'}</span></td>
-        <td>${it.quantidade||0}</td>
-        <td>${idx===0?(r.processo||'—'):''}</td>
-        <td>${idx===0?(r.tipo||'—'):''}</td>
-        <td>${idx===0?(r.prep_minutos+' min'):''}</td>
-        <td>${idx===0?(r.banho_minutos+' min'):''}</td>
-        <td>${idx===0?(r.banho_fim_data+' '+r.banho_fim_hora):''}</td>
-      </tr>`;
-    });
-  });
-  tb.innerHTML=linhas;
+  if(!regs||!regs.length){tb.innerHTML='<tr><td colspan="11" class="empty">Nenhum cesto concluído ainda.</td></tr>';return;}
+  tb.innerHTML=regs.map(r=>`<tr class="${r.tipo==='Retrabalho'?'retrab':''}">
+    <td>${r.id}</td><td><strong>${r.numero_cesto}</strong></td><td>${r.n_itens>1?(r.ordem+' +'+(r.n_itens-1)):(r.ordem||'—')}</td>
+    <td>${r.material||'—'}</td><td><span class="small">${r.texto_breve||'—'}</span></td><td>${r.qtd_total}</td>
+    <td>${r.processo||'—'}</td><td><span class="pill ${r.tipo==='Retrabalho'?'pill-retrab':'pill-normal'}">${r.tipo}</span></td>
+    <td class="mono">${r.prep_minutos}</td><td class="mono">${r.banho_minutos}</td>
+    <td><span class="small">${r.banho_fim||''}</span></td>
+  </tr>`).join('');
 }
 function set(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 

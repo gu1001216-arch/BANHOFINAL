@@ -239,7 +239,7 @@ function renderItens(){
         <div><label class="mini-label">OP</label><input class="input input-sm" value="${it.ordem||''}" oninput="setCampo(${idx},'ordem',this.value)" inputmode="numeric"></div>
         <div><label class="mini-label">Código</label><input class="input input-sm" value="${it.material||''}" oninput="setCampo(${idx},'material',this.value)" onblur="buscarPorCodigo(${idx})"></div>
         <div class="item-grid-full"><label class="mini-label">Descrição</label><input class="input input-sm" value="${(it.texto_breve||'').replace(/"/g,'&quot;')}" oninput="setCampo(${idx},'texto_breve',this.value)"></div>
-        <div><label class="mini-label">Quantidade</label><input type="number" class="input input-sm" value="${it.quantidade||0}" oninput="setCampo(${idx},'quantidade',this.value)" inputmode="numeric"></div>
+        <div><label class="mini-label">Quantidade</label><input type="text" class="input input-sm" value="${it.quantidade||0}" oninput="setCampo(${idx},'quantidade',this.value)" inputmode="numeric" pattern="[0-9]*"></div>
       </div>
     </div>`).join('');
 }
@@ -366,7 +366,9 @@ async function salvar(){
   if(j.sucesso){fecharModal();carregar();}else document.getElementById('msgOrdem').innerHTML=`<span class="txt-err">${j.erro}</span>`;
 }
 document.getElementById('btnSalvar').addEventListener('click',salvar);
-document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')fecharModal();});
+let _downNoOverlay=false;
+document.getElementById('modal').addEventListener('pointerdown',e=>{_downNoOverlay=(e.target.id==='modal');});
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal'&&_downNoOverlay)fecharModal();_downNoOverlay=false;});
 
 sincronizarRelogio().then(()=>{carregar();setInterval(carregar,5000);setInterval(tick,1000);});
 setInterval(sincronizarRelogio,60000);
