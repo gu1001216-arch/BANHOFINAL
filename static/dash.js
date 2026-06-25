@@ -36,13 +36,18 @@ async function atualizar(){
 function renderHistorico(regs){
   const tb=document.getElementById('histBody');
   if(!regs||!regs.length){tb.innerHTML='<tr><td colspan="11" class="empty">Nenhum cesto concluído ainda.</td></tr>';return;}
-  tb.innerHTML=regs.map(r=>`<tr class="${r.tipo==='Retrabalho'?'retrab':''}">
+  tb.innerHTML=regs.map(r=>{
+    // texto pesquisável: todas as OPs, códigos e descrições do cesto
+    const itens=(r.itens&&r.itens.length)?r.itens:[{ordem:r.ordem,material:r.material,texto_breve:r.texto_breve}];
+    const busca=(r.numero_cesto+' '+itens.map(it=>(it.ordem||'')+' '+(it.material||'')+' '+(it.texto_breve||'')).join(' ')+' '+(r.processo||'')+' '+(r.tipo||'')).toLowerCase();
+    return `<tr class="${r.tipo==='Retrabalho'?'retrab':''}" data-busca="${busca.replace(/"/g,'')}">
     <td>${r.id}</td><td><strong>${r.numero_cesto}</strong></td><td>${r.n_itens>1?(r.ordem+' +'+(r.n_itens-1)):(r.ordem||'—')}</td>
     <td>${r.material||'—'}</td><td><span class="small">${r.texto_breve||'—'}</span></td><td>${r.qtd_total}</td>
     <td>${r.processo||'—'}</td><td><span class="pill ${r.tipo==='Retrabalho'?'pill-retrab':'pill-normal'}">${r.tipo}</span></td>
     <td class="mono">${r.prep_minutos}</td><td class="mono">${r.banho_minutos}</td>
     <td><span class="small">${r.banho_fim||''}</span></td>
-  </tr>`).join('');
+  </tr>`;}).join('');
+  if(typeof aplicarBuscaHistorico==='function')aplicarBuscaHistorico();
 }
 function set(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 

@@ -396,18 +396,42 @@ img,canvas{max-width:100%;}
 .ativo-info{font-size:.8rem;color:var(--slate);margin-bottom:8px;}
 .ativo-cron{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:1.5rem;color:var(--brand-blue);letter-spacing:1px;}
 
-/* ── Linha do tempo (slicer estilo Excel) ──────────────────────── */
-.timeline{display:flex;gap:0;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
-.tl-cell{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:58px;padding:10px 12px;
-  border:none;border-right:1px solid var(--line);background:#fff;cursor:pointer;font-family:inherit;transition:.13s;}
-.tl-cell:last-child{border-right:none;}
-.tl-cell:hover{background:var(--sky-soft);}
-.tl-cell.active{background:linear-gradient(120deg,var(--brand-green),var(--brand-blue));}
-.tl-cell.active .tl-dia,.tl-cell.active .tl-qtd{color:#fff;}
-.tl-dia{font-size:.78rem;font-weight:700;color:var(--ink);}
-.tl-qtd{font-size:.66rem;font-weight:800;color:var(--brand-blue);background:var(--bg);padding:1px 7px;border-radius:20px;}
-.tl-cell.active .tl-qtd{background:rgba(255,255,255,.25);}
-.tl-empty{padding:14px;color:var(--muted,#8B94A3);font-size:.85rem;}
+/* ── Filtros: linha do slicer + busca ─────────────────────────── */
+.filtros-row{display:flex;flex-wrap:wrap;gap:30px;align-items:flex-start;}
+.filtro-label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--slate);margin-bottom:9px;display:block;}
+.filtro-hint{font-weight:500;text-transform:none;letter-spacing:0;color:var(--muted,#8B94A3);}
+.filtro-desc{margin:12px 0 0;font-size:.82rem;line-height:1.5;color:var(--muted,#8B94A3);max-width:420px;}
+.filtro-desc strong{color:var(--slate);font-weight:700;}
+
+/* ── Slicer estilo Excel ──────────────────────────────────────── */
+.slicer{border:1px solid var(--brand-green);border-radius:10px;padding:13px 15px;background:#fff;min-width:360px;box-shadow:var(--shadow-sm);}
+.slicer-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.slicer-title{font-weight:800;font-size:1rem;color:var(--ink);}
+.slicer-tools{display:flex;align-items:center;gap:10px;}
+.slicer-nivel{background:none;border:none;color:var(--brand-blue);font-family:inherit;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;display:flex;align-items:center;gap:4px;padding:2px 4px;}
+.slicer-nivel i{font-size:.7rem;}
+.slicer-clear{background:none;border:none;color:var(--muted,#8B94A3);cursor:pointer;font-size:1rem;padding:2px;}
+.slicer-clear.ativo{color:var(--brand-blue);}
+.slicer-periodo{font-size:.82rem;color:var(--brand-blue);font-weight:600;margin-bottom:12px;}
+.slicer-track-wrap{overflow:hidden;}
+.slicer-track{display:flex;gap:0;}
+.slicer-seg{flex:1;min-width:46px;display:flex;flex-direction:column;align-items:center;cursor:pointer;user-select:none;}
+.slicer-seg-lbl{font-size:.64rem;font-weight:700;color:var(--slate);text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px;text-align:center;line-height:1.2;height:26px;display:flex;align-items:flex-end;}
+.slicer-seg-ano{font-size:.6rem;color:var(--muted,#8B94A3);font-weight:700;}
+.slicer-bar{width:100%;height:20px;background:#E2E7EE;border-right:2px solid #fff;transition:.13s;}
+.slicer-seg:first-child .slicer-bar{border-radius:4px 0 0 4px;}
+.slicer-seg:last-child .slicer-bar{border-radius:0 4px 4px 0;border-right:none;}
+.slicer-seg.sel .slicer-bar{background:linear-gradient(120deg,var(--brand-green),var(--brand-blue));}
+.slicer-seg.sel .slicer-seg-lbl{color:var(--ink);}
+.slicer-scroll{margin-top:9px;height:14px;background:#EEF1F6;border:1px solid var(--line);border-radius:7px;position:relative;}
+.slicer-scroll-thumb{position:absolute;top:1px;bottom:1px;left:1px;right:1px;background:#fff;border:1px solid #D8DFEA;border-radius:6px;}
+
+/* ── Busca ────────────────────────────────────────────────────── */
+.busca-combo{position:relative;max-width:560px;}
+.busca-icon{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--muted,#8B94A3);font-size:1rem;pointer-events:none;}
+.busca-input{width:100%;padding:11px 38px;border:1px solid #D8DFEA;border-radius:10px;font-family:inherit;font-size:.9rem;color:var(--ink);background:#fff;box-sizing:border-box;outline:none;transition:border-color .15s,box-shadow .15s;}
+.busca-input:focus{border-color:var(--brand-blue);box-shadow:0 0 0 4px rgba(22,104,192,.12);}
+.busca-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;border:none;background:#EEF1F6;color:var(--slate);border-radius:50%;cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;}
 
 /* ════════════════════════════════════════════════════════════
    Identidade Décio — faixa gradiente nos painéis e títulos
