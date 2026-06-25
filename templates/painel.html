@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Painel de Acompanhamento — Controle Produtividade Pré-Banho e Banho</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -21,7 +21,7 @@
     <span class="small" style="display:flex;align-items:center;gap:7px;"><span class="live-dot"></span>Atualização automática · somente visualização</span>
   </div>
 
-  <div class="panel panel-pad" style="margin-bottom:18px;">
+  <div class="panel panel-brand panel-pad" style="margin-bottom:18px;">
     <div class="section-title" style="font-size:.95rem;margin-bottom:14px;"><i class="bi bi-funnel"></i>Filtros</div>
     <label class="label" style="margin-bottom:9px;display:block;">Linha do tempo <span class="muted" style="font-weight:500;">— clique para selecionar um dia, ou use as datas</span></label>
     <div id="timeline" class="timeline"></div>
@@ -34,7 +34,7 @@
 
   <!-- Cestos ativos agora -->
   <div class="area-titulo"><i class="bi bi-broadcast"></i>Cestos ativos agora</div>
-  <div class="panel panel-pad" style="margin-bottom:22px;">
+  <div class="panel panel-brand panel-pad" style="margin-bottom:22px;">
     <div id="ativosLista" class="ativos-grid"><div class="muted small">Carregando…</div></div>
   </div>
 
@@ -59,7 +59,7 @@
     <div class="kpi k-teal"><div class="kpi-val" id="kArea">0</div><div class="kpi-lbl"><i class="bi bi-rulers"></i>Área total (m²)</div></div>
   </div>
 
-  <div class="panel panel-pad" style="margin-bottom:18px;">
+  <div class="panel panel-brand panel-pad" style="margin-bottom:18px;">
     <div class="section-title" style="font-size:1rem;margin-bottom:14px;"><i class="bi bi-diagram-3-fill"></i>Andamento em tempo real</div>
     <div id="andamento" class="andamento-grid"><div class="muted small">Carregando…</div></div>
   </div>
@@ -139,26 +139,47 @@ function tickAtivos(){
   });
 }
 
-// ── Linha do tempo (slicer de dias) ────────────────────────────────────────
+// ── Linha do tempo (slicer estilo Excel: clique ou arraste) ────────────────
+let _diasTL=[];
 async function montarTimeline(){
   const tl=document.getElementById('timeline');
   if(!tl)return;
+  // não remonta se o usuário já selecionou algo (preserva a seleção)
+  if(tl.querySelector('.tl-cell.active'))return;
   try{
     const d=await (await fetch('/api/painel/dados')).json();
-    const dias=Object.keys(d.por_dia||{});
-    if(!dias.length){tl.innerHTML='<span class="muted small">Sem dados ainda.</span>';return;}
-    tl.innerHTML=dias.map(dia=>`<button class="tl-cell" data-dia="${dia}" onclick="filtrarDia('${dia}')">
+    _diasTL=Object.keys(d.por_dia||{});
+    if(!_diasTL.length){tl.innerHTML='<span class="tl-empty">Sem dados ainda.</span>';return;}
+    tl.innerHTML=_diasTL.map((dia,i)=>`<button class="tl-cell" data-dia="${dia}" data-idx="${i}">
       <span class="tl-dia">${dia}</span><span class="tl-qtd">${d.por_dia[dia]}</span></button>`).join('');
+    ligarArraste();
   }catch(_){}
 }
-function filtrarDia(dia){
-  // dia vem como dd/mm — converte para yyyy-mm-dd do ano atual
-  const [dd,mm]=dia.split('/');
+let _arrastando=false,_iniIdx=null;
+function ligarArraste(){
+  const cells=[...document.querySelectorAll('.tl-cell')];
+  cells.forEach(c=>{
+    c.addEventListener('pointerdown',e=>{e.preventDefault();_arrastando=true;_iniIdx=+c.dataset.idx;marcarRange(_iniIdx,_iniIdx);});
+    c.addEventListener('pointerenter',()=>{if(_arrastando)marcarRange(_iniIdx,+c.dataset.idx);});
+  });
+  document.addEventListener('pointerup',()=>{if(_arrastando){_arrastando=false;aplicarRange();}});
+}
+function marcarRange(a,b){
+  const lo=Math.min(a,b),hi=Math.max(a,b);
+  document.querySelectorAll('.tl-cell').forEach(c=>{
+    const i=+c.dataset.idx;c.classList.toggle('active',i>=lo&&i<=hi);
+  });
+}
+function aplicarRange(){
+  const ativos=[...document.querySelectorAll('.tl-cell.active')].map(c=>c.dataset.dia);
+  if(!ativos.length){limparDatas();return;}
   const ano=new Date().getFullYear();
-  const iso=`${ano}-${mm}-${dd}`;
-  document.getElementById('fDe').value=iso;
-  document.getElementById('fAte').value=iso;
-  document.querySelectorAll('.tl-cell').forEach(b=>b.classList.toggle('active',b.dataset.dia===dia));
+  const toISO=dia=>{const[dd,mm]=dia.split('/');return `${ano}-${mm}-${dd}`;};
+  // ordena pelas posições e pega extremos
+  const idxs=[...document.querySelectorAll('.tl-cell.active')].map(c=>+c.dataset.idx);
+  const primeiro=_diasTL[Math.min(...idxs)], ultimo=_diasTL[Math.max(...idxs)];
+  document.getElementById('fDe').value=toISO(primeiro);
+  document.getElementById('fAte').value=toISO(ultimo);
   if(window.atualizar)window.atualizar();
 }
 function limparDatas(){

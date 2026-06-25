@@ -33,7 +33,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 html{-webkit-text-size-adjust:100%;}
 body{
-  font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  font-family:'Manrope',system-ui,-apple-system,'Segoe UI',sans-serif;
   background:
     radial-gradient(1200px 600px at 110% -10%, #dfeaf2 0%, transparent 55%),
     var(--bg);
@@ -47,45 +47,41 @@ body{
 .topbar{
   position:sticky;top:0;z-index:50;
   display:flex;align-items:center;justify-content:space-between;
-  padding:12px 20px;
-  background:rgba(255,255,255,.92);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
-  border-bottom:1px solid var(--line);
-  box-shadow:0 2px 12px rgba(20,32,46,.06);
+  padding:14px 22px;
+  background:linear-gradient(120deg,var(--brand-green) 0%,var(--brand-blue) 100%);
+  box-shadow:0 4px 18px rgba(22,104,192,.22);
 }
-.topbar::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--brand-green),var(--brand-blue));}
-.topbar-brand{display:flex;align-items:center;gap:13px;}
+.topbar-brand{display:flex;align-items:center;gap:14px;}
 .brand-logo{
-  width:46px;height:46px;border-radius:12px;object-fit:cover;flex:none;
-  box-shadow:0 2px 10px rgba(20,32,46,.16);
+  width:46px;height:46px;border-radius:12px;object-fit:cover;flex:none;background:#fff;
+  box-shadow:0 2px 12px rgba(0,0,0,.22);
 }
 .brand-mark{
   width:44px;height:44px;border-radius:13px;
-  background:linear-gradient(120deg,var(--brand-green),var(--brand-blue));
+  background:rgba(255,255,255,.18);
   display:grid;place-items:center;color:#fff;font-size:1.5rem;
-  box-shadow:0 4px 14px rgba(22,104,192,.4);
 }
-.brand-text{display:flex;flex-direction:column;line-height:1.15;}
-.brand-title{color:var(--ink);font-weight:800;font-size:1.05rem;letter-spacing:-.2px;}
-.brand-sub{color:var(--brand-blue);font-size:.72rem;font-weight:700;letter-spacing:.3px;text-transform:uppercase;}
+.brand-text{display:flex;flex-direction:column;line-height:1.2;}
+.brand-title{color:#fff;font-weight:800;font-size:1.08rem;letter-spacing:-.2px;}
+.brand-sub{color:rgba(255,255,255,.85);font-size:.64rem;font-weight:700;letter-spacing:.17em;text-transform:uppercase;}
 .topbar-actions{display:flex;align-items:center;gap:8px;}
 .user-chip{
   display:inline-flex;align-items:center;gap:7px;
-  background:var(--bg);color:var(--ink-soft,var(--slate));
+  background:rgba(255,255,255,.18);color:#fff;
   padding:7px 13px;border-radius:30px;font-size:.82rem;font-weight:700;
 }
-.user-dot{width:9px;height:9px;border-radius:50%;background:var(--brand-green);display:inline-block;}
-.perfil-admin{background:#D6473F;}
-.perfil-banho{background:var(--brand-blue);}
-.perfil-prep{background:var(--brand-green);}
+.user-dot{width:9px;height:9px;border-radius:50%;background:#fff;display:inline-block;}
+.perfil-admin{background:#ffd5d2;}
+.perfil-banho{background:#cfe2fb;}
+.perfil-prep{background:#c4ecd4;}
 .tb-btn{
-  width:42px;height:42px;border-radius:12px;border:1px solid var(--line);
-  background:#fff;color:var(--brand-blue);font-size:1.1rem;
+  width:42px;height:42px;border-radius:12px;border:none;
+  background:rgba(255,255,255,.18);color:#fff;font-size:1.1rem;
   display:grid;place-items:center;text-decoration:none;transition:.18s;
 }
 .tb-btn:active{transform:scale(.92);}
-.tb-btn:hover{background:var(--bg);color:var(--brand-blue);border-color:#C9D6E8;}
-.tb-btn-exit{color:var(--red);}
-.tb-btn-exit:hover{background:var(--red);color:#fff;border-color:var(--red);}
+.tb-btn:hover{background:rgba(255,255,255,.3);color:#fff;}
+.tb-btn-exit:hover{background:var(--red);color:#fff;}
 
 /* ── Layout ──────────────────────────────────────────────────── */
 .page{max-width:1320px;margin:0 auto;padding:22px 20px 40px;}
@@ -291,7 +287,7 @@ textarea.input{min-height:auto;resize:vertical;}
 .chart-grid-3{display:grid;gap:16px;grid-template-columns:1fr 1fr 1fr;margin-bottom:18px;}
 @media(max-width:900px){.chart-grid-3{grid-template-columns:1fr;}}
 .export-bar{display:flex;gap:10px;flex-wrap:wrap;}
-.public-banner{background:linear-gradient(105deg,var(--aco-900),var(--aco-700));color:#fff;border-radius:var(--r);padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.public-banner{background:linear-gradient(120deg,var(--brand-green) 0%,var(--brand-blue) 100%);color:#fff;border-radius:var(--r);padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;box-shadow:0 4px 18px rgba(22,104,192,.22);}
 .public-banner h1{font-size:1.3rem;font-weight:800;display:flex;align-items:center;gap:10px;}
 .public-banner .live-dot{width:9px;height:9px;border-radius:50%;background:#56e6cf;display:inline-block;box-shadow:0 0 0 0 rgba(86,230,207,.7);animation:pulse 2s infinite;}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(86,230,207,.6);}70%{box-shadow:0 0 0 10px rgba(86,230,207,0);}100%{box-shadow:0 0 0 0 rgba(86,230,207,0);}}
@@ -400,12 +396,42 @@ img,canvas{max-width:100%;}
 .ativo-info{font-size:.8rem;color:var(--slate);margin-bottom:8px;}
 .ativo-cron{font-family:'JetBrains Mono',monospace;font-weight:800;font-size:1.5rem;color:var(--brand-blue);letter-spacing:1px;}
 
-/* ── Linha do tempo (slicer) ───────────────────────────────────── */
-.timeline{display:flex;gap:6px;flex-wrap:wrap;}
-.tl-cell{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px;padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font-family:inherit;transition:.15s;}
-.tl-cell:hover{border-color:var(--brand-blue);background:var(--sky-soft);}
-.tl-cell.active{border-color:var(--brand-blue);background:linear-gradient(120deg,var(--brand-green),var(--brand-blue));}
+/* ── Linha do tempo (slicer estilo Excel) ──────────────────────── */
+.timeline{display:flex;gap:0;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff;}
+.tl-cell{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:58px;padding:10px 12px;
+  border:none;border-right:1px solid var(--line);background:#fff;cursor:pointer;font-family:inherit;transition:.13s;}
+.tl-cell:last-child{border-right:none;}
+.tl-cell:hover{background:var(--sky-soft);}
+.tl-cell.active{background:linear-gradient(120deg,var(--brand-green),var(--brand-blue));}
 .tl-cell.active .tl-dia,.tl-cell.active .tl-qtd{color:#fff;}
 .tl-dia{font-size:.78rem;font-weight:700;color:var(--ink);}
-.tl-qtd{font-size:.72rem;font-weight:800;color:var(--brand-blue);background:var(--bg);padding:1px 8px;border-radius:20px;}
+.tl-qtd{font-size:.66rem;font-weight:800;color:var(--brand-blue);background:var(--bg);padding:1px 7px;border-radius:20px;}
 .tl-cell.active .tl-qtd{background:rgba(255,255,255,.25);}
+.tl-empty{padding:14px;color:var(--muted,#8B94A3);font-size:.85rem;}
+
+/* ════════════════════════════════════════════════════════════
+   Identidade Décio — faixa gradiente nos painéis e títulos
+   ════════════════════════════════════════════════════════════ */
+.panel-brand{position:relative;overflow:hidden;}
+.panel-brand::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+  background:linear-gradient(120deg,var(--brand-green) 0%,var(--brand-blue) 100%);}
+
+/* barrinha vertical gradiente ao lado dos títulos de seção */
+.area-titulo::before,.section-title.brand::before{
+  content:"";width:4px;height:20px;border-radius:3px;flex:none;
+  background:linear-gradient(160deg,var(--brand-green),var(--brand-blue));
+}
+.area-titulo i{display:none;}
+
+/* cabeçalho de tabela com tinta gradiente da marca */
+.tbl thead th{
+  background:linear-gradient(120deg,rgba(43,164,92,.10),rgba(22,104,192,.10)),#F2F5FA;
+  border-bottom:2px solid;
+  border-image:linear-gradient(120deg,var(--brand-green),var(--brand-blue)) 1;
+  color:#2C4257;
+}
+
+/* botões pequenos / secundários no estilo pílula da marca */
+.btn-sm{border-radius:999px;}
+.btn-secondary{background:linear-gradient(120deg,var(--brand-green),var(--brand-blue));color:#fff;border:none;box-shadow:0 1px 3px rgba(22,104,192,.3);}
+.btn-secondary:hover{filter:brightness(1.06);color:#fff;}
