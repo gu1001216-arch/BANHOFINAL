@@ -1,1 +1,5 @@
-web: python -m gunicorn app:app --workers 2 --threads 4 --timeout 300 --bind 0.0.0.0:$PORT
+Ordem	Nº do item	Material	Texto breve material	Quantidade total	Qtd.de refugo plan.	Qtd.de refugo real	Quantidade EM	Unid.med.ordem
+10063110	1	2000039	PROC PINTURA CHAPA MET HASTE V2	1	0	0	0	PEÇ
+10075667	1	2000039	PROC PINTURA CHAPA MET HASTE V2	1	0	0	0	PEÇ
+10063111	1	2000044	PROC PINT SUP HASTE V3	1	0	0	0	PEÇ
+10079296	1	2000068	PROC PINT COLUNA MRD 16U 470	8	0	0	8	PEÇ
